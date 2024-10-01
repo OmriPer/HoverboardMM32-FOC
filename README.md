@@ -30,7 +30,7 @@ https://youtu.be/hCaIlEKzI3A
 * sine wave mode to drive the motor with more torque and higher effiency
 ## Autodetect&configuration
 
-https://github.com/AILIFE4798/Hoverboard-Firmware-Hack-Gen2.x-MM32/wiki/How-to-use-PinFinder-firmware
+https://gitlab.com/ailife8881/Hoverboard-Firmware-Hack-Gen2.x-MM32/-/wikis/home/%7BHow-to-use-PinFinder-firmware%7D
 
 ## todo
 * optimizations
