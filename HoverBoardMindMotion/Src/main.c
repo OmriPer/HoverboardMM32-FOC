@@ -24,6 +24,8 @@
 #include "../Inc/pwm_gen.h"
 #include "../Inc/PID.h"
 #include "../Inc/hallhandle.h"
+#include "../Inc/foc_config.h"
+#include "../Inc/foc_eferu.h"
 
 uint8_t step=1;//very importatnt to set to 1 or it will not work
 uint32_t millis;
@@ -94,15 +96,17 @@ uint16_t pinstorage[64]={
 	         //      missing pin returns garbage that could trip SOFT_ILIMIT.
 	0,       // [35]
 	19200,   // [36] BAUD
-	8192,    // [37] PWM_RES
+	3000,    // [37] PWM_RES        TIM1 period: 96MHz/2/3000 = 16 kHz, the rate the EFeru controller is tuned for
+	         //      (FOC_PWM_RES in Inc/foc_config.h must match).
 	1,       // [38] SLAVE_ID       RemoteUartBus address: commands for other ids are ignored, answers carry this id
 	30,      // [39] WINDINGS
 	1,       // [40] INVERT_LOWSIDE 1: EG2123A gate driver LIN input is active low (datasheet + motor test)
 	65535,   // [41] SOFT_ILIMIT    irrelevant while ITOTAL_DIVIDER is 0
 	0,       // [42] AWDG           0: analog watchdog would watch the missing ITOTAL channel
 	1,       // [43]
-	2,       // [44] DRIVEMODE      2 = SINE_VOLT: sinusoidal drive from the hall angle. The FOC modes (4-6) are not
-	         //      finished in this firmware (speed loop never computed, no FOC handling in speedupdate()).
+	2,       // [44] DRIVEMODE      with FOC_EFERU (Inc/foc_config.h) mapped onto the EFeru controller:
+	         //      0/1 commutation, 2/3 sinusoidal (voltage), 4 FOC voltage, 5 FOC speed, 6 FOC torque.
+	         //      2 for first bring-up: it does not depend on the (not yet calibrated) phase currents.
 	42000,   // [45] BAT_FULL       mV
 	32000,   // [46] BAT_EMPTY      mV. Below this for 10 checks with the motor stopped, the motor is disabled
 	         //      until reboot and the buzzer beeps. Keep a bench supply above 32 V.
@@ -145,6 +149,9 @@ s32 main(void){
 	BLDC_init();
 	//initialize timer
 	TIM1_init(PWM_RES, 0);
+#if FOC_EFERU
+	FOC_Init();    //EFeru controller; keeps outputs off until phase current offsets are calibrated
+#endif
 	//systick config
 	//timer1 commutation interrupt config
 	NVIC_Configure(TIM1_BRK_UP_TRG_COM_IRQn, 1);

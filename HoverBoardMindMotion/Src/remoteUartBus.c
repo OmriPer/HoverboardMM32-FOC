@@ -25,6 +25,8 @@
 
 #include "../Inc/sim_eeprom.h"
 #include "../Inc/calculation.h"
+#include "../Inc/foc_config.h"
+#include "../Inc/foc_eferu.h"
 
 
 #pragma pack(1)
@@ -235,6 +237,12 @@ void serialit(void){
 					{
 						BAT_EMPTY = pData->fBattEmpty * 1000;
 					}
+#if FOC_EFERU
+					if (FOC_ApplyDriveMode(pData->iDriveMode))    //0..6, see foc_eferu.c
+					{
+						DRIVEMODE = pData->iDriveMode;
+					}
+#else
 					if (pData->iDriveMode <= SINE_SPEED)
 					{
 						DRIVEMODE = pData->iDriveMode;
@@ -242,6 +250,7 @@ void serialit(void){
 						PID_Init();
 						TIMOCInit();
 					}
+#endif
 					if (pData->iSlaveNew >= 0 && 0)    //disabled!
 						SLAVE_ID = pData->iSlaveNew;
 			

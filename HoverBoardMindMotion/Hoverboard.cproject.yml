@@ -15,6 +15,7 @@ project:
 
   add-path:
     - Library/MM32SPIN25/HAL_lib/inc
+    - Inc    # BLDC_controller.c includes "BLDC_controller.h" by name
 
   misc:
     - C:
@@ -82,6 +83,14 @@ project:
         - file: Src/hallhandle.c
         - file: Src/park.c
         - file: Src/PID.c
+        - file: Src/foc_eferu.c
+          optimize: balanced
+    - group: EFeru-BLDC-controller-GPL-3.0
+      # Runs every 62.5 us (16 kHz) in the ADC interrupt: optimized even in Debug builds.
+      optimize: balanced
+      files:
+        - file: Src/BLDC_controller.c
+        - file: Src/BLDC_controller_data.c
     - group: HAL-SPIN25
       files:
         - file: Library/MM32SPIN25/HAL_lib/src/hal_adc.c

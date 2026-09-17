@@ -1,3 +1,5 @@
+#include "../Inc/foc_config.h"
+#include "../Inc/foc_eferu.h"
 #include "hal_tim.h"
 #include "hal_conf.h"
 #include "hal_adc.h"
@@ -89,6 +91,18 @@ void ADC1_COMP_IRQHandler(void){
 			}
 			poweron++;
 		}else{
+#if FOC_EFERU
+			static uint8_t slowDiv = 0;
+			if(slowDiv++ == 0){    //every 256 steps (~62 Hz): double math is expensive without an FPU
+				uint16_t tmp = ADC1->ADDR15;
+				vcc=(double)4915.2/tmp;
+				vbat = (double)VBAT_DIVIDER*analogRead(VBATPIN)*vcc*100/4096;
+				itotal = 0;    //no DC link current on this board (ITOTAL_DIVIDER is 0 anyway)
+				avgvbat();
+				avgItotal();
+			}
+			FOC_Isr(analogRead(IPHASEAPIN), analogRead(IPHASEBPIN));
+#else
 			uint16_t tmp = ADC1->ADDR15;
 			vcc=(double)4915.2/tmp;
 			vbat = (double)VBAT_DIVIDER*analogRead(VBATPIN)*vcc*100/4096;//read adc register
@@ -153,6 +167,7 @@ void ADC1_COMP_IRQHandler(void){
 					Update_PWM(&pwm_gen);
 				}
 			}
+#endif
 		}
 		ADC_ClearITPendingBit(ADC1, ADC_IT_EOC);
 	}

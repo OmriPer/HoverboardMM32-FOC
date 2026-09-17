@@ -1,4 +1,5 @@
 //initialize all pheberals
+#include "../Inc/foc_config.h"
 #include "../Inc/pinout.h"
 #include "hal_gpio.h"
 #include "hal_rcc.h"
@@ -173,7 +174,11 @@ void TIM1_init(u16 arr, u16 psc){
 	//an active-low break could hold all outputs off.
 	TIM_BDTRInitStructure.TIM_Break = (AWDG || OCPPIN<PINCOUNT) ? TIM_Break_Enable : TIM_Break_Disable;
 	TIM_BDTRInitStructure.TIM_BreakPolarity = AWDG ? TIM_BreakPolarity_High : TIM_BreakPolarity_Low ;
+#if FOC_EFERU
+	TIM_BDTRInitStructure.TIM_DeadTime = FOC_DEAD_TIME;    //complementary switching on all phases
+#else
 	TIM_BDTRInitStructure.TIM_DeadTime = 1;
+#endif
 	TIM_BDTRInitStructure.TIM_LOCKLevel = TIM_LOCKLevel_OFF;
 	TIM_BDTRInitStructure.TIM_AutomaticOutput = TIM_AutomaticOutput_Enable;
 	TIM_BDTRConfig(TIM1, &TIM_BDTRInitStructure);
