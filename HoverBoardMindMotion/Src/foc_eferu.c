@@ -52,6 +52,15 @@ uint16_t foc_maxIsrTicks = 0;
 uint8_t  foc_errCode     = 0;
 uint8_t  foc_calibrated  = 0;
 
+/* Hall mapping, writable at runtime (e.g. VS Code Live Watch) for bring-up.
+ * foc_hallInvert: 1 = invert all three hall inputs (180 degree shift).
+ * foc_hallOrder:  which board pins feed the controller's hall A, B, C:
+ *   0 = A,B,C  1 = A,C,B  2 = B,A,C  3 = B,C,A  4 = C,A,B  5 = C,B,A
+ *   (A/B/C = HALLAPIN/HALLBPIN/HALLCPIN from pinstorage). Odd swaps reverse the sequence. */
+uint8_t  foc_hallInvert  = FOC_HALL_INVERT;
+uint8_t  foc_hallOrder   = FOC_HALL_ORDER;
+static const uint8_t hallOrderTab[6][3] = {{0,1,2},{0,2,1},{1,0,2},{1,2,0},{2,0,1},{2,1,0}};
+
 static uint8_t  ctrlModReq = CTRL_MOD_VLT;
 static uint16_t offsetCount = 0;
 static int16_t  offsetA = 2048;
@@ -140,10 +149,12 @@ void FOC_Isr(uint16_t adcPhaseA, uint16_t adcPhaseB)
     }
 
     /* 2. Inputs. */
-    uint8_t hallA = digitalRead(HALLAPIN) ? 1 : 0;
-    uint8_t hallB = digitalRead(HALLBPIN) ? 1 : 0;
-    uint8_t hallC = digitalRead(HALLCPIN) ? 1 : 0;
-    if (FOC_HALL_INVERT) {
+    uint8_t pins[3] = { digitalRead(HALLAPIN) ? 1 : 0, digitalRead(HALLBPIN) ? 1 : 0, digitalRead(HALLCPIN) ? 1 : 0 };
+    const uint8_t *order = hallOrderTab[foc_hallOrder < 6 ? foc_hallOrder : 0];
+    uint8_t hallA = pins[order[0]];
+    uint8_t hallB = pins[order[1]];
+    uint8_t hallC = pins[order[2]];
+    if (foc_hallInvert) {
         hallA ^= 1; hallB ^= 1; hallC ^= 1;
     }
 

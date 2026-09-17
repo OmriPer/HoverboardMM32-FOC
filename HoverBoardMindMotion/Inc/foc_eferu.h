@@ -21,5 +21,7 @@ extern uint32_t foc_isrCount;       // controller steps executed
 extern uint16_t foc_maxIsrTicks;    // longest FOC_Isr run in TIM1 ticks (10.4 ns each); one PWM period = 6000
 extern uint8_t  foc_errCode;        // controller z_errCode (hall/blocked-motor diagnostics)
 extern uint8_t  foc_calibrated;     // 1 once phase current offsets are measured
+extern uint8_t  foc_hallInvert;     // runtime hall polarity, starts at FOC_HALL_INVERT
+extern uint8_t  foc_hallOrder;      // runtime hall order 0..5, starts at FOC_HALL_ORDER
 
 #endif
