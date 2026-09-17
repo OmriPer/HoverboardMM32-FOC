@@ -38,7 +38,7 @@ void io_init(){
 		pinMode(LATCHPIN, OUTPUT);
 	}
 	if(BUTTONPIN<PINCOUNT){
-		pinMode(BUTTONPIN, INPUT);
+		pinMode(BUTTONPIN, INPUT_PULLDOWN);    //button is active high; without a pull-down a floating pin reads as pressed
 	}
 	if(BUZZERPIN<PINCOUNT){
 		pinMode(BUZZERPIN, OUTPUT);
@@ -151,7 +151,9 @@ void TIM1_init(u16 arr, u16 psc){
 	TIM_OCInitStructure.TIM_Pulse = 0;
 	TIM_OCInitStructure.TIM_OCNPolarity = INVERT_LOWSIDE ? TIM_OCNPolarity_Low : TIM_OCNPolarity_High;
 	TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Reset;
-	TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCNIdleState_Reset;
+	//idle level must mean "low side off": with an active-low LIN (INVERT_LOWSIDE) that is high.
+	//With Reset, disabling the outputs would switch all three low sides on and short the motor phases.
+	TIM_OCInitStructure.TIM_OCNIdleState = INVERT_LOWSIDE ? TIM_OCNIdleState_Set : TIM_OCNIdleState_Reset;
 
 	TIM_OC1Init(TIM1, &TIM_OCInitStructure);
 	TIM_OC2Init(TIM1, &TIM_OCInitStructure);
@@ -167,7 +169,9 @@ void TIM1_init(u16 arr, u16 psc){
 	// Automatic Output enable, Break, dead time and lock configuration
 	TIM_BDTRInitStructure.TIM_OSSIState = TIM_OSSIState_Enable;
 	TIM_BDTRInitStructure.TIM_OSSRState = TIM_OSSRState_Enable;
-	TIM_BDTRInitStructure.TIM_Break = TIM_Break_Enable;
+	//break input only when something drives it (AWDG or an OCP pin). With neither, BKIN is unconnected and
+	//an active-low break could hold all outputs off.
+	TIM_BDTRInitStructure.TIM_Break = (AWDG || OCPPIN<PINCOUNT) ? TIM_Break_Enable : TIM_Break_Disable;
 	TIM_BDTRInitStructure.TIM_BreakPolarity = AWDG ? TIM_BreakPolarity_High : TIM_BreakPolarity_Low ;
 	TIM_BDTRInitStructure.TIM_DeadTime = 1;
 	TIM_BDTRInitStructure.TIM_LOCKLevel = TIM_LOCKLevel_OFF;
@@ -245,7 +249,7 @@ uint8_t UART_GPIO_Init(){
 			}else{
 				pinMode(uarts[i].io, INPUT);
 			}
-			uart=uarts[i].uart;
+			uart = uarts[i].uart==2 ? 2 : 1;    //UART1 entries in uarts[] leave .uart at 0, which UARTX_Init() treated as UART2
 		}
 	}
 	return uart;

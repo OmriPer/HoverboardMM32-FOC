@@ -56,15 +56,65 @@ extern uint8_t lowbatperm;
 ////////////////////////////////////////////////////////////////////////////////////////////
 //  compile device specefic firmware for mass produce
 //  change EEPROMEN to 0
-#define EEPROMEN 1
-//  copy pinstorage initializer from autodetect and replace the default line below
-uint16_t pinstorage[64]={0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xDCAB, 31, 250, 0, 19200, 8192, 1, 30, 0, 10, 300, 1, 1, 42000, 32000, 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+//  EEPROMEN 0: the pinstorage initializer below is the whole configuration.
+//  The flash settings page is not read at all, so a config saved by PinFinder
+//  (or leftover flash contents) cannot silently override it.
+#define EEPROMEN 0
+/*
+ * Pin configuration for the MM32SPIN27PF master board, PCB "H217776A-JK 2021-05-11".
+ * Every value below was measured on this board; see the notes per entry.
+ * Pin values are indices into pins[] (names from Inc/hardware.h), 0xFFFF = not present.
+ */
+uint16_t pinstorage[64]={
+	PB8,     // [0]  HALLA   hall sensor A. Order confirmed by PinFinder hall detection with the motor driven.
+	PB4,     // [1]  HALLB
+	PB9,     // [2]  HALLC   (PB4/PB8/PB9 all on TIM3 for hall speed sensing)
+	PA15,    // [3]  LEDR    PA15 lights the LEDs (pulse test). No other LED pins found, so G/B are unset:
+	0xFFFF,  // [4]  LEDG    the battery-colour display in main() needs all three and is skipped.
+	0xFFFF,  // [5]  LEDB
+	0xFFFF,  // [6]  LEDU    not used by this firmware
+	0xFFFF,  // [7]  LEDD    not used by this firmware
+	PC14,    // [8]  BUZZER  pulse test: buzzer sounds when driven high
+	PB11,    // [9]  BUTTON  active high. Board has no pull-down, so io_init() enables the internal one.
+	PC13,    // [10] LATCH   self-hold. Must be a push-pull output driven high (internal pull-up cannot hold it).
+	0xFFFF,  // [11] (unused)
+	PA1,     // [12] VBAT    ADC ch1. Reads 35.7 V at 36 V supply with divider 31.
+	0xFFFF,  // [13] ITOTAL  none: no ADC channel responds to total current on this board.
+	PD0,     // [14] TX      UART1 TX1 header (verified with UartTest firmware)
+	PD1,     // [15] RX      UART1 RX1 header
+	PA4,     // [16] IPHASEA phase current amp (0.39 V offset, bidirectional). Only used by FOC; not calibrated.
+	PB0,     // [17] IPHASEB phase current amp, pair of PA4.
+	0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,   // [18]-[22] unused
+	0xFFFF,  // [23] OCP     no overcurrent comparator output found (PA7 pull-low test: no pin responded)
+	0xFFFF,  // [24] OCPREF
+	0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,   // [25]-[31] unused
+	0xDCAB,  // [32] MAGIC_NUMBER (only checked when EEPROMEN is 1)
+	31,      // [33] VBAT_DIVIDER   calibrated: 31*36/35.7 = 31.3
+	0,       // [34] ITOTAL_DIVIDER 0 = itotal always 0. There is no ITOTAL pin, and analogRead() on a
+	         //      missing pin returns garbage that could trip SOFT_ILIMIT.
+	0,       // [35]
+	19200,   // [36] BAUD
+	8192,    // [37] PWM_RES
+	1,       // [38] SLAVE_ID       RemoteUartBus address: commands for other ids are ignored, answers carry this id
+	30,      // [39] WINDINGS
+	1,       // [40] INVERT_LOWSIDE 1: EG2123A gate driver LIN input is active low (datasheet + motor test)
+	65535,   // [41] SOFT_ILIMIT    irrelevant while ITOTAL_DIVIDER is 0
+	0,       // [42] AWDG           0: analog watchdog would watch the missing ITOTAL channel
+	1,       // [43]
+	2,       // [44] DRIVEMODE      2 = SINE_VOLT: sinusoidal drive from the hall angle. The FOC modes (4-6) are not
+	         //      finished in this firmware (speed loop never computed, no FOC handling in speedupdate()).
+	42000,   // [45] BAT_FULL       mV
+	32000,   // [46] BAT_EMPTY      mV. Below this for 10 checks with the motor stopped, the motor is disabled
+	         //      until reboot and the buzzer beeps. Keep a bench supply above 32 V.
+	1000,    // [47] SERIAL_TIMEOUT [ms] without a valid command before the speed command drops to 0
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0             // [48]-[63]
+};
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 
 s32 main(void){
 	DELAY_Init();
-	if(!restorecfg()&&EEPROMEN){    //if data in eeprom is not valid, do not boot up
+	if(EEPROMEN&&!restorecfg()){    //EEPROMEN checked first: with 0 the flash config is never loaded    //if data in eeprom is not valid, do not boot up
 		RCC_AHBPeriphClockCmd(RCC_AHBENR_GPIOA, ENABLE);
 		RCC_AHBPeriphClockCmd(RCC_AHBENR_GPIOB, ENABLE);
 		RCC_AHBPeriphClockCmd(RCC_AHBENR_GPIOC, ENABLE);
