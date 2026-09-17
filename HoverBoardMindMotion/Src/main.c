@@ -78,6 +78,9 @@ uint16_t pinstorage[64]={
 	0xFFFF,  // [7]  LEDD    not used by this firmware
 	PC14,    // [8]  BUZZER  pulse test: buzzer sounds when driven high
 	PB11,    // [9]  BUTTON  active high. Board has no pull-down, so io_init() enables the internal one.
+	         //      With a power bypass switch closed AND the latch (PC13) driven high, PB11 reads high as if the
+	         //      button were held: the firmware then stays in the boot "wait for release" loop and never
+	         //      answers on RemoteUartBus (motor commands still work, they run in interrupts). Open the bypass.
 	PC13,    // [10] LATCH   self-hold. Must be a push-pull output driven high (internal pull-up cannot hold it).
 	0xFFFF,  // [11] (unused)
 	PA1,     // [12] VBAT    ADC ch1. Reads 35.7 V at 36 V supply with divider 31.

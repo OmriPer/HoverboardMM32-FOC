@@ -36,14 +36,17 @@
 /* Samples used to calibrate the phase current offsets at startup (outputs stay off). */
 #define FOC_OFFSET_SAMPLES    2000
 
-/* Hall inputs. EFeru inverts the hall pins (!IDR). Whether this board needs it has not been
- * tested yet: if the motor runs rough, stalls or runs backwards in SIN mode, flip this first. */
+/* Hall inputs, measured on this board in SIN voltage mode at command +-80 (wheel lifted):
+ *   invert 1, order 4:  +31.9 / -33.3 rpm, smooth both ways, command sign = measured sign  <- used
+ *   invert 0, order 4:  -33.2 / +32.1 rpm, smooth but 180 degrees off (sign reversed)
+ *   invert 0, order 3:  stall / -27.1 rpm
+ *   invert 1, order 0:  about -25 rpm forward, stutters in reverse (first bring-up default) */
 #define FOC_HALL_INVERT       1
 /* Order in which HALLAPIN/HALLBPIN/HALLCPIN feed the controller's hall A/B/C (0..5, see
  * foc_eferu.c). PinFinder's A/B/C follow its own commutation table, which need not match
  * the controller's phase convention. Both values can be changed at runtime from the debugger
  * (foc_hallInvert, foc_hallOrder); put the working pair here once found. */
-#define FOC_HALL_ORDER        0
+#define FOC_HALL_ORDER        4     // controller A,B,C = HALLC,HALLA,HALLB = PB9,PB8,PB4
 
 /* Phase current scaling. The controller expects A2BIT_CONV counts per ampere on i_phaAB/i_phaBC.
  * PA4/PB0 gain is NOT calibrated yet: current = (offset - adc) * NUM / DEN.
