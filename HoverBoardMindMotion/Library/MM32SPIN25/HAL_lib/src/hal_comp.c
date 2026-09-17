@@ -94,7 +94,7 @@ interrupt vector using NVIC_Init() function.
 */
 
 /* Includes ------------------------------------------------------------------*/
-#include "HAL_comp.h"
+#include "hal_comp.h"
 
 /** @addtogroup
 * @{

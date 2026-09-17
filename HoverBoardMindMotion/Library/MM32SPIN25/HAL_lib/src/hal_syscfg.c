@@ -26,7 +26,7 @@
 */
 
 /* Includes ------------------------------------------------------------------*/
-#include "HAL_syscfg.h"
+#include "hal_syscfg.h"
 
 /** @addtogroup StdPeriph_Driver
 * @{

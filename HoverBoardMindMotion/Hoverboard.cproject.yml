@@ -1,0 +1,106 @@
+# Main hoverboard firmware (not PinFinder), built for the MM32SPIN27PF board.
+# Board-specific pin configuration lives in Src/main.c (pinstorage initializer).
+# Compiler flags reproduce the uVision MM32SPIN25 target's armclang settings.
+
+project:
+  output:
+    base-name: HoverboardMM32SPIN27
+    type:
+      - elf
+      - hex
+
+  define:
+    # Load-bearing: selects HAL_device.h, the SPIN25/27 pin tables, and pin counts.
+    - TARGET_MM32SPIN25
+
+  add-path:
+    - Library/MM32SPIN25/HAL_lib/inc
+
+  misc:
+    - C:
+        - -std=c11
+      C-CPP:
+        - -fno-rtti
+        - -funsigned-char
+        - -fshort-enums
+        - -fshort-wchar
+        - -ffunction-sections
+        - -Wno-packed
+        - -Wno-missing-variable-declarations
+        - -Wno-missing-prototypes
+        - -Wno-missing-noreturn
+        - -Wno-sign-conversion
+        - -Wno-nonportable-include-path
+        - -Wno-reserved-id-macro
+        - -Wno-unused-macros
+        - -Wno-documentation-unknown-command
+        - -Wno-documentation
+        - -Wno-license-management
+        - -Wno-parentheses-equality
+      ASM:
+        - -masm=auto
+      Link:
+        - --map
+        - --load_addr_map_info
+        - --xref
+        - --callgraph
+        - --symbols
+        - --info sizes
+        - --info totals
+        - --info unused
+        - --info veneers
+        - --strict
+        - --summary_stderr
+        - --info summarysizes
+
+  linker:
+    # Same memory map as the PinFinder build: 128 KB flash with the last 2 KB
+    # reserved for the simulated EEPROM, 12 KB RAM, two-region stack/heap model.
+    - script: Hoverboard_SPIN27.sct
+
+  components:
+    - component: ARM::CMSIS:CORE
+    - component: MindMotion::Device:Startup
+
+  groups:
+    - group: Src
+      files:
+        - file: Src/main.c
+        - file: Src/delay.c
+        - file: Src/bldc.c
+        - file: Src/initialize.c
+        - file: Src/interrupt.c
+        - file: Src/uart.c
+        - file: Src/remoteUartBus.c
+        - file: Src/calculation.c
+        - file: Src/hardware.c
+        - file: Src/sim_eeprom.c
+        - file: Src/ipark.c
+        - file: Src/pwm_gen.c
+        - file: Src/FOC_Math.c
+        - file: Src/clarke.c
+        - file: Src/hallhandle.c
+        - file: Src/park.c
+        - file: Src/PID.c
+    - group: HAL-SPIN25
+      files:
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_adc.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_comp.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_crc.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_div.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_dma.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_exti.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_flash.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_gpio.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_i2c.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_iwdg.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_misc.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_op.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_pwr.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_rcc.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_spi.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_syscfg.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_tim.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_uart.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_uid.c
+        - file: Library/MM32SPIN25/HAL_lib/src/hal_wwdg.c

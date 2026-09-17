@@ -1,0 +1,8 @@
+cbuild-pack:
+  resolved-packs:
+    - resolved-pack: ARM::CMSIS@6.3.0
+      selected-by-pack:
+        - ARM::CMSIS@^6.3.0
+    - resolved-pack: MindMotion::MM32SPIN2x_DFP@1.1.6
+      selected-by-pack:
+        - MindMotion::MM32SPIN2x_DFP@^1.1.6

@@ -1,0 +1,34 @@
+solution:
+  created-for: CMSIS-Toolbox@2.14.1
+  compiler: AC6
+
+  packs:
+    - pack: ARM::CMSIS@^6.3.0
+    - pack: MindMotion::MM32SPIN2x_DFP@^1.1.6
+
+  target-types:
+    - type: SPIN27
+      device: MindMotion::MM32SPIN27PF
+      target-set:
+        - set:
+          debugger:
+            name: J-Link Server
+            protocol: swd
+            clock: 4000000
+          images:
+            - project-context: Hoverboard.Debug
+
+  build-types:
+    # Parity with the uVision 'MM32SPIN25' target as it currently stands.
+    # Keil Optim=0 emitted no -O flag at all, i.e. armclang's -O0.
+    - type: Debug
+      debug: on
+      optimize: none # -O0
+    # What Keil Optim=2 means in the AC6 dropdown (see etc/AC6.*.cmake:
+    # none=-O0 debug=-O1 balanced=-O2 speed=-O3 size=-Oz).
+    - type: Release
+      debug: on
+      optimize: debug # -O1
+
+  projects:
+    - project: ./Hoverboard.cproject.yml

@@ -1,3 +1,11 @@
 HoverBoardGigaDevice/Objects/*
 HoverBoardGigaDevice/BinariesToFlash/hoverboard*
 /HoverBoardMindMotion/Objects
+
+# CMSIS-Toolbox / csolution
+/HoverBoardMindMotion/out/
+/HoverBoardMindMotion/tmp/
+/HoverBoardMindMotion/Hoverboard.cbuild-idx.yml
+/HoverBoardMindMotion/*.cbuild-set.yml
+/HoverBoardMindMotion/RTE/_Debug_SPIN27/
+/HoverBoardMindMotion/RTE/_Release_SPIN27/

@@ -19,7 +19,7 @@
 */
 
 /* Includes ------------------------------------------------------------------*/
-#include "HAL_dma.h"
+#include "hal_dma.h"
 
 /** @addtogroup StdPeriph_Driver
 * @{

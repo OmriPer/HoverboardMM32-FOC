@@ -107,8 +107,8 @@ configuration of specific timers
 */
 
 /* Includes ------------------------------------------------------------------*/
-#include "HAL_tim.h"
-#include "HAL_rcc.h"
+#include "hal_tim.h"
+#include "hal_rcc.h"
 
 /** @addtogroup StdPeriph_Driver
 * @{
