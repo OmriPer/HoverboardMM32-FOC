@@ -207,6 +207,26 @@ static void sendTelemetry()
     ws.broadcastTXT(s);
 }
 
+// USB serial log (115200): the commands while they change or are non-zero, so the page can be
+// tested without the boards connected.
+static void logCommands()
+{
+    static uint32_t lastMs = 0;
+    static long lastL = 0, lastR = 0;
+    long l = lroundf(cmdLeft), r = lroundf(cmdRight);
+    if (millis() - lastMs < 250 || (l == lastL && r == lastR && l == 0 && r == 0)) {
+        return;
+    }
+    lastMs = millis();
+    lastL = l;
+    lastR = r;
+    bool phoneAlive = clients > 0 && millis() - lastInputMs < PHONE_TIMEOUT_MS;
+    Serial.printf("cmd left %4ld right %4ld rpm | input %5ld %5ld | max %ld | phone %s | boards %s %s\n",
+                  l, r, (long)inputLeft, (long)inputRight, (long)maxRpm, phoneAlive ? "ok" : "none",
+                  answerLeft.receivedMs && millis() - answerLeft.receivedMs < 500 ? "L" : "-",
+                  answerRight.receivedMs && millis() - answerRight.receivedMs < 500 ? "R" : "-");
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -231,4 +251,5 @@ void loop()
     readBoards();
     sendToBoards();
     sendTelemetry();
+    logCommands();
 }
