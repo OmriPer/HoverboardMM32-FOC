@@ -24,7 +24,7 @@ Examples:
   remote_uart_bus.py monitor                       # speed 0, print telemetry
   remote_uart_bus.py run --speed 100 --seconds 5   # constant command, then stop
   remote_uart_bus.py interactive                   # +/- keys change the command
-  remote_uart_bus.py --slaves 1 2 interactive      # both boards: 1/2 select one, a = both
+  remote_uart_bus.py --slaves 1,2 interactive      # both boards: 1/2 select one, a = both
   remote_uart_bus.py config --drive-mode 2         # select DRIVEMODE (not kept over reboot
                                                    #  with EEPROMEN 0; writes board flash)
   remote_uart_bus.py limits --current 2 --speed 150  # FOC current [A] / speed [rpm] limits,
@@ -291,8 +291,9 @@ def main():
     p.add_argument("--port", default="/dev/ttyUSB0")
     p.add_argument("--baud", type=int, default=19200)
     p.add_argument("--slave", type=int, default=1, help="SLAVE_ID of the board (default 1)")
-    p.add_argument("--slaves", type=int, nargs="+",
-                   help="several boards, e.g. --slaves 1 2 (the master relays to the others); overrides --slave")
+    p.add_argument("--slaves", type=lambda v: [int(x) for x in v.split(",")],
+                   help="several boards, comma separated, e.g. --slaves 1,2 (the master relays to the "
+                        "others); overrides --slave")
     p.add_argument("--rate", type=float, default=20.0, help="commands per second per board (default 20)")
     p.add_argument("--print-interval", type=float, default=0.25)
     p.add_argument("--max-speed", type=int, default=300,
