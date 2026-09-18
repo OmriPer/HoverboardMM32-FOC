@@ -14,7 +14,13 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <WebSocketsServer.h>
+#include <ESPmDNS.h>
 #include "config.h"
+#if __has_include("secrets.h")
+#include "secrets.h"
+#else
+#error "Copy include/secrets.example.h to include/secrets.h and enter your Wi-Fi name and password"
+#endif
 #include "hover_protocol.h"
 #include "web_page.h"
 
@@ -227,14 +233,40 @@ static void logCommands()
                   answerRight.receivedMs && millis() - answerRight.receivedMs < 500 ? "R" : "-");
 }
 
+// Join the local network; fall back to an own hotspot if that fails.
+static void startWifi()
+{
+    WiFi.mode(WIFI_STA);
+    WiFi.setHostname(MDNS_NAME);
+    WiFi.setAutoReconnect(true);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    Serial.printf("Joining Wi-Fi \"%s\" ", WIFI_SSID);
+    uint32_t start = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_CONNECT_TIMEOUT_MS) {
+        delay(250);
+        Serial.print('.');
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.printf("\nConnected, open http://%s.local or http://%s\n", MDNS_NAME,
+                      WiFi.localIP().toString().c_str());
+    } else {
+        Serial.printf("\nCould not join \"%s\"; opening hotspot \"%s\"\n", WIFI_SSID, AP_SSID);
+        WiFi.disconnect(true);
+        WiFi.mode(WIFI_AP);
+        WiFi.softAP(AP_SSID, AP_PASSWORD);
+        Serial.printf("Join \"%s\" and open http://%s\n", AP_SSID, WiFi.softAPIP().toString().c_str());
+    }
+    if (MDNS.begin(MDNS_NAME)) {
+        MDNS.addService("http", "tcp", 80);
+    }
+}
+
 void setup()
 {
     Serial.begin(115200);
     Serial2.begin(HOVER_BAUD, SERIAL_8N1, HOVER_RX_PIN, HOVER_TX_PIN);
 
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP(WIFI_SSID, WIFI_PASSWORD);
-    Serial.printf("Wi-Fi \"%s\", open http://%s\n", WIFI_SSID, WiFi.softAPIP().toString().c_str());
+    startWifi();
 
     http.on("/", []() { http.send_P(200, "text/html", WEB_PAGE); });
     http.onNotFound([]() { http.send(404, "text/plain", "not found"); });

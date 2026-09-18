@@ -1,9 +1,14 @@
 // Settings for the ESP32 hoverboard remote. Change these, then rebuild.
 #pragma once
 
-// Wi-Fi hotspot the phone connects to. The page is at http://192.168.4.1
-#define WIFI_SSID           "Hoverboard"
-#define WIFI_PASSWORD       "hoverboard123"   // at least 8 characters; change it
+// Wi-Fi. The ESP32 joins your network (name and password in include/secrets.h, not in git; copy
+// secrets.example.h) and is reachable as http://<MDNS_NAME>.local or by the IP printed on the USB
+// serial port. If it cannot join within WIFI_CONNECT_TIMEOUT_MS, it opens its own hotspot instead
+// (page at http://192.168.4.1).
+#define MDNS_NAME               "hoverboard"
+#define WIFI_CONNECT_TIMEOUT_MS 15000
+#define AP_SSID                 "Hoverboard"
+#define AP_PASSWORD             "hoverboard123"   // fallback hotspot, at least 8 characters; change it
 
 // UART to the master board's PC header (UART1: master TX1 -> ESP32 RX, master RX1 <- ESP32 TX),
 // 3.3 V logic on both sides. Connect GND as well.
