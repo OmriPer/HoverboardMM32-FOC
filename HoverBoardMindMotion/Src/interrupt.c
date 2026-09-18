@@ -1,5 +1,6 @@
 #include "../Inc/foc_config.h"
 #include "../Inc/foc_eferu.h"
+#include "../Inc/board_config.h"
 #include "hal_tim.h"
 #include "hal_conf.h"
 #include "hal_adc.h"
@@ -57,9 +58,20 @@ void DMA1_Channel2_3_IRQHandler(void){
   }
 }	
 
+#if RELAY_ENABLE
+extern uint8_t uarten;
+extern uint8_t sRxBuffer2[1];
+#endif
+
 void DMA1_Channel4_5_IRQHandler(void){
   if(DMA_GetITStatus(DMA1_IT_TC5)) {
     DMA_ClearITPendingBit(DMA1_IT_GL5);
+#if RELAY_ENABLE
+    if(uarten==1){    //master: UART2 is the relay link to the slave
+      RelayRxByte(sRxBuffer2[0]);
+      return;
+    }
+#endif
     serialit();
   }
 }	

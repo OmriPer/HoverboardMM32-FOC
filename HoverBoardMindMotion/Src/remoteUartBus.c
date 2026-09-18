@@ -27,6 +27,7 @@
 #include "../Inc/calculation.h"
 #include "../Inc/foc_config.h"
 #include "../Inc/foc_eferu.h"
+#include "../Inc/board_config.h"
 
 
 #pragma pack(1)
@@ -107,6 +108,21 @@ typedef struct{				// ´#pragma pack(1)´ needed to get correct sizeof()
 uint32_t iTimeLastRx = 0;
 
 
+#if RELAY_ENABLE
+/* Master: relay between the PC (UART1) and the slave (UART2), see Inc/board_config.h.
+ * The DMA interrupts only fill these buffers; RemoteUpdate() sends them from the main loop, so the
+ * relayed answers never interleave with the master's own. A frame that arrives while the previous one
+ * in the same direction is still waiting is dropped; the PC resends at its own rate. */
+uint8_t sRxBuffer2[1];                                      // UART2 RX DMA target
+static uint8_t aRelayToSlave[sizeof(SerialServer2HoverConfig)];   // largest PC frame
+static volatile uint8_t iRelayToSlaveLen = 0;
+static uint8_t aSlaveRx[sizeof(SerialHover2Server)];
+static uint8_t iSlaveRxPos = 0;
+static uint8_t aRelayToPc[sizeof(SerialHover2Server)];
+static volatile uint8_t bRelayToPc = 0;
+#endif
+
+
 uint16_t CalcCRC(uint8_t *ptr, int count){    //file checksum calculation
 	
   uint16_t  crc;
@@ -143,7 +159,44 @@ void RemoteUpdate(void){
 		AnswerMaster();
 		bAnswerMaster = 0;
 	}
+#if RELAY_ENABLE
+	if (iRelayToSlaveLen)
+	{
+		UART_Send_GroupTo(UART2, aRelayToSlave, iRelayToSlaveLen);
+		iRelayToSlaveLen = 0;
+	}
+	if (bRelayToPc)
+	{
+		UART_Send_GroupTo(UART1, aRelayToPc, sizeof(aRelayToPc));
+		bRelayToPc = 0;
+	}
+#endif
 }
+
+#if RELAY_ENABLE
+/* Master: one byte from the slave (UART2 RX DMA interrupt). Collects SerialHover2Server answers;
+ * complete frames with a valid CRC are queued for the PC. */
+void RelayRxByte(uint8_t cRead){
+	/* The answer starts with START_FRAME 0xABCD, sent low byte first. */
+	if (iSlaveRxPos == 0 && cRead != 0xCD)
+		return;
+	if (iSlaveRxPos == 1 && cRead != 0xAB)
+	{
+		iSlaveRxPos = (cRead == 0xCD) ? 1 : 0;
+		return;
+	}
+	aSlaveRx[iSlaveRxPos++] = cRead;
+	if (iSlaveRxPos < sizeof(aSlaveRx))
+		return;
+	iSlaveRxPos = 0;
+	uint16_t iCRC = (aSlaveRx[sizeof(aSlaveRx)-1] << 8) | aSlaveRx[sizeof(aSlaveRx)-2];
+	if (iCRC == CalcCRC(aSlaveRx, sizeof(aSlaveRx) - 2) && !bRelayToPc)
+	{
+		memcpy(aRelayToPc, aSlaveRx, sizeof(aRelayToPc));
+		bRelayToPc = 1;
+	}
+}
+#endif
 
 extern 	uint32_t steerCounter;
 
@@ -163,6 +216,7 @@ void AnswerMaster(void){
 #endif
 	oData.iSpeed = (int16_t) (realspeed	*10);
 	oData.iOdom = (int32_t) iOdom;	//pwm	;
+
 	//oData.iOdom = iAnswerMaster++;
 
 	oData.checksum = 	CalcCRC((uint8_t*) &oData, sizeof(oData) - 2);	// (first bytes except crc)
@@ -286,6 +340,13 @@ void serialit(void){
 			bAnswerMaster = 1;
 			iTimeLastRx = millis;  	// Reset the pwm timout to avoid stopping motors
 		}
+#if RELAY_ENABLE
+		else if (!iRelayToSlaveLen && iRxDataSize <= sizeof(aRelayToSlave))
+		{
+			memcpy(aRelayToSlave, aReceiveBuffer, iRxDataSize);    // for another board: pass on to the slave
+			iRelayToSlaveLen = iRxDataSize;
+		}
+#endif
 	}
 }
 

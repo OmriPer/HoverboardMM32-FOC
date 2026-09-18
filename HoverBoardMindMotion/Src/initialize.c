@@ -1,5 +1,6 @@
 //initialize all pheberals
 #include "../Inc/foc_config.h"
+#include "../Inc/board_config.h"
 #include "../Inc/pinout.h"
 #include "hal_gpio.h"
 #include "hal_rcc.h"
@@ -258,6 +259,17 @@ uint8_t UART_GPIO_Init(){
 		}
 	}
 	return uart;
+}
+
+/* UART2 on the master-slave cable (Inc/board_config.h), same baud rate as the PC link. RX has a
+ * pull-up so a disconnected or unpowered peer reads as an idle line. */
+void LinkUartInit(u32 baudrate){
+	UARTX_Init(baudrate, 2);
+	GPIOA->AFRL = (GPIOA->AFRL & ~(0xFu << 12)) | (0x1u << 12);    //PA3 AF1 = UART2_RX
+	GPIOA->ODR |= 1u << 3;                                         //pull-up
+	GPIOA->CRL  = (GPIOA->CRL  & ~(0xFu << 12)) | (0x8u << 12);    //input with pull-up/down
+	GPIOA->AFRL = (GPIOA->AFRL & ~(0xFu << 8)) | (0x1u << 8);      //PA2 AF1 = UART2_TX
+	GPIOA->CRL  = (GPIOA->CRL  & ~(0xFu << 8)) | (0xBu << 8);      //alternate function push-pull, 50 MHz
 }
 
 void DMA_NVIC_Config(DMA_Channel_TypeDef* dam_chx, u32 cpar, u32 cmar, u16 cndtr){

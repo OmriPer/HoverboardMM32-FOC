@@ -6,3 +6,4 @@
 
 void AnswerMaster(void);
 void RemoteUpdate(void);
+void RelayRxByte(uint8_t cRead);    //master relay: byte received from the slave (UART2)

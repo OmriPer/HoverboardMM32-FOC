@@ -14,7 +14,21 @@ solution:
           debugger:
             name: J-Link Server
             protocol: swd
-            clock: 4000000
+            clock: 1000000 # 4 MHz occasionally lost the target while the motor ran
+          images:
+            - project-context: Hoverboard.Debug
+
+    # The slave board: same PCB, powered and addressed through the master (Inc/board_config.h).
+    - type: SPIN27-Slave
+      device: MindMotion::MM32SPIN27PF
+      define:
+        - BOARD_SLAVE
+      target-set:
+        - set:
+          debugger:
+            name: J-Link Server
+            protocol: swd
+            clock: 1000000
           images:
             - project-context: Hoverboard.Debug
 

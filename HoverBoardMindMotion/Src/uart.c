@@ -13,6 +13,13 @@ void UART_Send_Group(u8* buf, u16 len){
         UART_Send_Byte(*buf++);
 }
 
+void UART_Send_GroupTo(UART_TypeDef* uart, u8* buf, u16 len){
+    while(len--){
+        UART_SendData(uart, *buf++);
+        while(!UART_GetFlagStatus(uart, UART_CSR_TXC));
+    }
+}
+
 void UART_SendString(char* str){
     while(*str)
         UART_Send_Byte((u8)(*str++));

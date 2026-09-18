@@ -26,6 +26,7 @@
 #include "../Inc/hallhandle.h"
 #include "../Inc/foc_config.h"
 #include "../Inc/foc_eferu.h"
+#include "../Inc/board_config.h"
 
 uint8_t step=1;//very importatnt to set to 1 or it will not work
 uint32_t millis;
@@ -39,6 +40,7 @@ bool comm=1;
 int8_t dir=1;
 uint8_t uartBuffer=0;
 u8 sRxBuffer[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+extern uint8_t sRxBuffer2[1];    //master relay, Src/remoteUartBus.c
 int vbat;
 int itotal;
 int fvbat;
@@ -77,16 +79,26 @@ uint16_t pinstorage[64]={
 	0xFFFF,  // [6]  LEDU    not used by this firmware
 	0xFFFF,  // [7]  LEDD    not used by this firmware
 	PC14,    // [8]  BUZZER  pulse test: buzzer sounds when driven high
+#if BOARD_IS_SLAVE
+	0xFFFF,  // [9]  BUTTON  slave: none, powered through the master-slave cable
+	0xFFFF,  // [10] LATCH   slave: none
+#else
 	PB11,    // [9]  BUTTON  active high. Board has no pull-down, so io_init() enables the internal one.
 	         //      With a power bypass switch closed AND the latch (PC13) driven high, PB11 reads high as if the
 	         //      button were held: the firmware then stays in the boot "wait for release" loop and never
 	         //      answers on RemoteUartBus (motor commands still work, they run in interrupts). Open the bypass.
 	PC13,    // [10] LATCH   self-hold. Must be a push-pull output driven high (internal pull-up cannot hold it).
+#endif
 	0xFFFF,  // [11] (unused)
 	PA1,     // [12] VBAT    ADC ch1. Reads 35.7 V at 36 V supply with divider 31.
 	0xFFFF,  // [13] ITOTAL  none: no ADC channel responds to total current on this board.
+#if BOARD_IS_SLAVE
+	PA2,     // [14] TX      slave: UART2 on the master-slave cable, set up by LinkUartInit() (Inc/board_config.h)
+	PA3,     // [15] RX
+#else
 	PD0,     // [14] TX      UART1 TX1 header (verified with UartTest firmware)
 	PD1,     // [15] RX      UART1 RX1 header
+#endif
 	PB2,     // [16] IPHASEA phase B current, output of the MCU's op-amp OP2 (input PB0).
 	         //      FOC_Init() enables the op-amps (see foc_config.h). Only used by FOC; gain not calibrated.
 	PA6,     // [17] IPHASEB phase C current, output of op-amp OP1 (input PA4). FOC_CUR_PHASE_SEL 1 = {iB, iC}.
@@ -102,15 +114,22 @@ uint16_t pinstorage[64]={
 	19200,   // [36] BAUD
 	3000,    // [37] PWM_RES        TIM1 period: 96MHz/2/3000 = 16 kHz, the rate the EFeru controller is tuned for
 	         //      (FOC_PWM_RES in Inc/foc_config.h must match).
-	1,       // [38] SLAVE_ID       RemoteUartBus address: commands for other ids are ignored, answers carry this id
+#if BOARD_IS_SLAVE
+	2,       // [38] SLAVE_ID       RemoteUartBus address: commands for other ids are ignored, answers carry this id
+#else
+	1,       // [38] SLAVE_ID       RemoteUartBus address: commands for other ids are ignored, answers carry this id.
+	         //      The master relays frames for other ids to the slave (Inc/board_config.h).
+#endif
 	30,      // [39] WINDINGS
 	1,       // [40] INVERT_LOWSIDE 1: EG2123A gate driver LIN input is active low (datasheet + motor test)
 	65535,   // [41] SOFT_ILIMIT    irrelevant while ITOTAL_DIVIDER is 0
 	0,       // [42] AWDG           0: analog watchdog would watch the missing ITOTAL channel
 	1,       // [43]
-	2,       // [44] DRIVEMODE      with FOC_EFERU (Inc/foc_config.h) mapped onto the EFeru controller:
+	5,       // [44] DRIVEMODE      with FOC_EFERU (Inc/foc_config.h) mapped onto the EFeru controller:
 	         //      0/1 commutation, 2/3 sinusoidal (voltage), 4 FOC voltage, 5 FOC speed, 6 FOC torque.
-	         //      2 for first bring-up: it does not depend on the (not yet calibrated) phase currents.
+	         //      5: the speed command is a target in rpm (up to FOC_N_MOT_MAX), held against load
+	         //      within FOC_I_MOT_MAX. 2 is the fallback if the phase current sensing misbehaves:
+	         //      it does not use the phase currents.
 	42000,   // [45] BAT_FULL       mV
 	32000,   // [46] BAT_EMPTY      mV. Below this for 10 checks with the motor stopped, the motor is disabled
 	         //      until reboot and the buzzer beeps. Keep a bench supply above 32 V.
@@ -167,13 +186,23 @@ s32 main(void){
 	Iwdg_Init(IWDG_Prescaler_32, 0xff);
 	#endif
 	//serial1.begin(19200);
+#if BOARD_IS_SLAVE
+	uarten=2;    //the slave only talks on the master-slave link (Inc/board_config.h)
+	LinkUartInit((uint32_t)BAUD);
+#else
 	uarten=UART_GPIO_Init();
 	UARTX_Init((uint32_t)BAUD,uarten);
+#endif
 	//uart interrupt
 	//uart dma
 	if(uarten==1){
 		DMA_NVIC_Config(DMA1_Channel3, (u32)&UART1->RDR, (u32)sRxBuffer, 1);
 		NVIC_Configure(DMA1_Channel2_3_IRQn, 1);
+#if RELAY_ENABLE
+		LinkUartInit((uint32_t)BAUD);    //UART2 to the slave, see Inc/board_config.h
+		DMA_NVIC_Config(DMA1_Channel5, (u32)&UART2->RDR, (u32)sRxBuffer2, 1);
+		NVIC_Configure(DMA1_Channel4_5_IRQn, 1);
+#endif
 	}else{
 		DMA_NVIC_Config(DMA1_Channel5, (u32)&UART2->RDR, (u32)sRxBuffer, 1);
 		NVIC_Configure(DMA1_Channel4_5_IRQn, 1);
