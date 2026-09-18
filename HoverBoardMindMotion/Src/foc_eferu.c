@@ -78,6 +78,28 @@ int16_t foc_curBFilt = 0;
 static int32_t curAAcc = 0;
 static int32_t curBAcc = 0;
 
+/* Spike rejection and low-pass for one phase current channel (see FOC_CUR_SPIKE, FOC_CUR_LPF_SHIFT). */
+typedef struct {
+    int32_t acc;      // filtered value << FOC_CUR_LPF_SHIFT
+    uint8_t spikes;   // rejected samples in a row
+} CurFilter;
+static CurFilter curFiltA;
+static CurFilter curFiltB;
+
+static int32_t curFilter(CurFilter *f, int32_t sample)
+{
+    int32_t y = f->acc >> FOC_CUR_LPF_SHIFT;
+#if FOC_CUR_SPIKE
+    int32_t d = sample - y;
+    if ((d > FOC_CUR_SPIKE || d < -FOC_CUR_SPIKE) && ++f->spikes < FOC_CUR_SPIKE_ACCEPT) {
+        return y;
+    }
+    f->spikes = 0;
+#endif
+    f->acc += sample - y;
+    return f->acc >> FOC_CUR_LPF_SHIFT;
+}
+
 static const uint8_t hallOrderTab[6][3] = {{0,1,2},{0,2,1},{1,0,2},{1,2,0},{2,0,1},{2,1,0}};
 
 static uint8_t  ctrlModReq = CTRL_MOD_VLT;
@@ -190,8 +212,8 @@ void FOC_Isr(uint16_t adcPhaseA, uint16_t adcPhaseB)
         hallA ^= 1; hallB ^= 1; hallC ^= 1;
     }
 
-    int32_t curA = ((int32_t)offsetA - adcPhaseA) * FOC_CUR_GAIN_NUM / FOC_CUR_GAIN_DEN;
-    int32_t curB = ((int32_t)offsetB - adcPhaseB) * FOC_CUR_GAIN_NUM / FOC_CUR_GAIN_DEN;
+    int32_t curA = ((int32_t)offsetA - adcPhaseA) * FOC_CUR_GAIN_A_NUM / FOC_CUR_GAIN_A_DEN;
+    int32_t curB = ((int32_t)offsetB - adcPhaseB) * FOC_CUR_GAIN_B_NUM / FOC_CUR_GAIN_B_DEN;
 
     foc_curA = clamp16(curA, -32768, 32767);
     foc_curB = clamp16(curB, -32768, 32767);
@@ -219,8 +241,8 @@ void FOC_Isr(uint16_t adcPhaseA, uint16_t adcPhaseB)
     rtU_motor.b_hallA      = hallA;
     rtU_motor.b_hallB      = hallB;
     rtU_motor.b_hallC      = hallC;
-    rtU_motor.i_phaAB      = clamp16(curA, -32768, 32767);
-    rtU_motor.i_phaBC      = clamp16(curB, -32768, 32767);
+    rtU_motor.i_phaAB      = clamp16(curFilter(&curFiltA, curA), -32768, 32767);
+    rtU_motor.i_phaBC      = clamp16(curFilter(&curFiltB, curB), -32768, 32767);
     rtU_motor.i_DCLink     = 0;   // no DC link current measurement on this board
 
     /* 3. Controller step. */

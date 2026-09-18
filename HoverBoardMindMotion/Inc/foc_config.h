@@ -60,18 +60,34 @@
  * pinstorage must be PB2/PA6. */
 #define FOC_OPAMP_ENABLE      1
 
-/* Phase current scaling. The controller expects A2BIT_CONV counts per ampere on i_phaAB/i_phaBC.
- * Gain is NOT calibrated yet: current = (offset - adc) * NUM / DEN.
- * Set these after comparing phase currents against a known current (see bring-up notes). */
+/* Phase current scaling. The controller expects FOC_A2BIT_CONV counts per ampere on i_phaAB/i_phaBC;
+ * current = (offset - adc) * NUM / DEN for each channel.
+ * Phase B (IPHASEA, PB2): 28.5 counts/A, measured with a multimeter in series with the phase wire
+ *   during static vectors of 0.49, 0.9 and 1.5 A (linear within 1.3 counts).
+ * Phase C (IPHASEB, PA6): not measured directly; the vector tests read 7% less than phase B at the
+ *   same current, so ~26.5 counts/A. */
 #define FOC_A2BIT_CONV        50
-#define FOC_CUR_GAIN_NUM      1
-#define FOC_CUR_GAIN_DEN      1
+#define FOC_CUR_GAIN_A_NUM    500     // 50 / 28.5
+#define FOC_CUR_GAIN_A_DEN    285
+#define FOC_CUR_GAIN_B_NUM    500     // 50 / 26.5
+#define FOC_CUR_GAIN_B_DEN    265
+/* Phase current filtering, applied to both channels before the controller.
+ * The phase C signal (PA4 -> OP1 -> PA6) is noisy on this board even at standstill (about +-3 A rms
+ * with outliers to +-20 A, phase B about +-0.8 A), most likely from the board's sense circuit.
+ * Spike rejection: a sample further than FOC_CUR_SPIKE counts from the filtered value is ignored,
+ *   unless FOC_CUR_SPIKE_ACCEPT such samples come in a row (then it is a real change). 0 = off.
+ * Low-pass: filtered += (sample - filtered) >> FOC_CUR_LPF_SHIFT. 0 = off, 2 = 1/4 per step
+ *   (noise / 2.6, delay ~0.25 ms: ~3 deg at 25 Hz electrical, ~20 deg at 250 Hz = 1000 rpm). */
+#define FOC_CUR_SPIKE         300     // counts (6 A at FOC_A2BIT_CONV 50)
+#define FOC_CUR_SPIKE_ACCEPT  2
+#define FOC_CUR_LPF_SHIFT     2
+
 /* Which phases IPHASEA/IPHASEB measure: 0 = {iA, iB}, 1 = {iB, iC}, 2 = {iA, iC}. Measured: {iB, iC}. */
 #define FOC_CUR_PHASE_SEL     1
 
 /* Controller limits (same meaning as EFeru config.h). */
 #define FOC_DIAG_ENA          1       // motor diagnostics (hall errors, blocked motor)
-#define FOC_I_MOT_MAX         15      // [A] FOC current limit. Meaningless until currents are calibrated.
+#define FOC_I_MOT_MAX         5       // [A] FOC current limit. Bench value; EFeru default is 15.
 #define FOC_N_MOT_MAX         1000    // [rpm] speed limit
 #define FOC_FIELD_WEAK_ENA    0       // field weakening / phase advance off
 #define FOC_FIELD_WEAK_MAX    5       // [A]
