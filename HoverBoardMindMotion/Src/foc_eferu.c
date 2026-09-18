@@ -83,6 +83,7 @@ typedef struct {
     int32_t acc;      // filtered value << FOC_CUR_LPF_SHIFT
     uint8_t spikes;   // rejected samples in a row
 } CurFilter;
+static int32_t iqAcc = 0;      // controller iq << 6, low-pass over 64 steps (4 ms), for telemetry
 static CurFilter curFiltA;
 static CurFilter curFiltB;
 
@@ -104,6 +105,8 @@ static const uint8_t hallOrderTab[6][3] = {{0,1,2},{0,2,1},{1,0,2},{1,2,0},{2,0,
 
 static uint8_t  ctrlModReq = CTRL_MOD_VLT;
 static uint16_t offsetCount = 0;
+static int32_t  offsetSumA = 0;
+static int32_t  offsetSumB = 0;
 static int16_t  offsetA = 2048;
 static int16_t  offsetB = 2048;
 static int8_t   hallPosPrev = -1;
@@ -168,11 +171,37 @@ void FOC_Init(void)
     PWM_RES  = FOC_PWM_RES;
     TIM1->ARR = FOC_PWM_RES;
 
-    /* Outputs stay off until the current offsets are calibrated. */
+    /* 50% duty on all phases (zero voltage) for the offset calibration; FOC_Isr() switches the
+     * outputs on. */
     TIM1->CCR1 = FOC_PWM_RES / 2;
     TIM1->CCR2 = FOC_PWM_RES / 2;
     TIM1->CCR3 = FOC_PWM_RES / 2;
     TIM_CtrlPWMOutputs(TIM1, DISABLE);
+}
+
+int16_t FOC_GetIqCentiAmps(void)
+{
+    /* iq is in A * FOC_A2BIT_CONV * 16. Only the FOC modes compute it; 0 in COM and SIN modes. */
+    if (rtP_Left.z_ctrlTypSel != CTRL_TYP_FOC) {
+        return 0;
+    }
+    return (int16_t)((iqAcc >> 6) * 100 / (FOC_A2BIT_CONV * 16));
+}
+
+void FOC_SetLimits(uint16_t currentDeciAmps, uint16_t speedRpm)
+{
+    if (currentDeciAmps > 0) {
+        if (currentDeciAmps > FOC_I_MOT_LIMIT * 10) {
+            currentDeciAmps = FOC_I_MOT_LIMIT * 10;
+        }
+        rtP_Left.i_max = (int16_t)((currentDeciAmps * FOC_A2BIT_CONV / 10) << 4);
+    }
+    if (speedRpm > 0) {
+        if (speedRpm > FOC_N_MOT_LIMIT) {
+            speedRpm = FOC_N_MOT_LIMIT;
+        }
+        rtP_Left.n_max = (int16_t)(speedRpm << 4);
+    }
 }
 
 /* Position on the center-aligned counter triangle, 0 .. 2*ARR, for timing measurement. */
@@ -191,12 +220,17 @@ void FOC_Isr(uint16_t adcPhaseA, uint16_t adcPhaseB)
 {
     uint16_t tStart = timerTrianglePos();
 
-    /* 1. Phase current offsets, measured with the outputs off (EFeru bldc.c method). */
-    if (offsetCount < FOC_OFFSET_SAMPLES) {
-        offsetA = (int16_t)((adcPhaseA + offsetA) / 2);
-        offsetB = (int16_t)((adcPhaseB + offsetB) / 2);
+    /* 1. Phase current offsets, measured while the bridge switches at 50% duty (see foc_config.h). */
+    if (offsetCount < FOC_OFFSET_SETTLE + FOC_OFFSET_SAMPLES) {
+        TIM_CtrlPWMOutputs(TIM1, lowbatperm ? DISABLE : ENABLE);
+        if (offsetCount >= FOC_OFFSET_SETTLE) {
+            offsetSumA += adcPhaseA;
+            offsetSumB += adcPhaseB;
+        }
         offsetCount++;
-        if (offsetCount == FOC_OFFSET_SAMPLES) {
+        if (offsetCount == FOC_OFFSET_SETTLE + FOC_OFFSET_SAMPLES) {
+            offsetA = (int16_t)(offsetSumA / FOC_OFFSET_SAMPLES);
+            offsetB = (int16_t)(offsetSumB / FOC_OFFSET_SAMPLES);
             foc_calibrated = 1;
         }
         return;
@@ -265,6 +299,7 @@ void FOC_Isr(uint16_t adcPhaseA, uint16_t adcPhaseB)
 
     /* 5. Telemetry for the RemoteUartBus answer. */
     realspeed = rtY_motor.n_mot;   // [rpm]
+    iqAcc += rtY_motor.iq - (iqAcc >> 6);
     int8_t hallPos = rtConstP.vec_hallToPos_Value[(hallA << 2) | (hallB << 1) | hallC];
     if (hallPosPrev >= 0 && hallPos != hallPosPrev) {
         int8_t d = hallPos - hallPosPrev;

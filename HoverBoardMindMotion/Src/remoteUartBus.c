@@ -79,6 +79,15 @@ typedef struct {			// ´#pragma pack(1)´ needed to get correct sizeof()
    uint16_t checksum;
 } SerialServer2HoverConfig;
 
+typedef struct {			// FOC limits, RAM only (not saved), only with FOC_EFERU
+   uint8_t cStart;			//  = '/';
+   uint8_t  iDataType;  //  3 = unique id for this data struct
+   uint8_t 	iSlave;			//  contains the slave id this message is intended for
+   uint16_t iCurrentMax;	//  FOC current limit in 0.1 A, 0 = unchanged
+   uint16_t iSpeedMax;	//  FOC speed limit in rpm, 0 = unchanged
+   uint16_t checksum;
+} SerialServer2HoverFocLimits;
+
 static uint8_t aReceiveBuffer[255];	//sizeof(SerialServer2Hover)
 
 #define START_FRAME         0xABCD       // [-] Start frme definition for reliable serial communication
@@ -147,7 +156,11 @@ void AnswerMaster(void){
 	oData.cStart = START_FRAME;
 	oData.iSlave = SLAVE_ID;
 	oData.iVolt = (uint16_t) (fvbat);
+#if FOC_EFERU
+	oData.iAmp = FOC_GetIqCentiAmps();    //no DC current sensing on this board: report the FOC torque current (0 outside FOC modes)
+#else
 	oData.iAmp = (int16_t) 	(fitotal);
+#endif
 	oData.iSpeed = (int16_t) (realspeed	*10);
 	oData.iOdom = (int32_t) iOdom;	//pwm	;
 	//oData.iOdom = iAnswerMaster++;
@@ -194,6 +207,8 @@ void serialit(void){
 			case 0: iRxDataSize = sizeof(SerialServer2Hover);	break;
 			case 1: iRxDataSize = sizeof(SerialServer2HoverMaster);	break;
 			case 2: iRxDataSize = sizeof(SerialServer2HoverConfig);	break;
+			case 3: iRxDataSize = sizeof(SerialServer2HoverFocLimits);	break;
+			default: iReceivePos = -1;	break;    //unknown type: wait for the next '/'
 		}
 		return;
 	}
@@ -255,6 +270,14 @@ void serialit(void){
 						SLAVE_ID = pData->iSlaveNew;
 			
 					EEPROM_Write((u8*)pinstorage, 2 * 64);    //if the detection failed, the pin is still saved
+					break;
+				}
+				case 3:
+				{
+#if FOC_EFERU
+					SerialServer2HoverFocLimits* pData = (SerialServer2HoverFocLimits*) aReceiveBuffer;
+					FOC_SetLimits(pData->iCurrentMax, pData->iSpeedMax);
+#endif
 					break;
 				}
 			}

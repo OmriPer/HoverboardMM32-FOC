@@ -8,14 +8,17 @@ Protocol (packed little-endian structs, CRC-16/XMODEM over all bytes except the 
   PC -> board, type 0  SerialServer2Hover:       '/' 0 slave speed:int16 wState:uint8 crc:uint16
   PC -> board, type 2  SerialServer2HoverConfig:  '/' 2 slave battFull:float battEmpty:float
                                                   driveMode:uint8 slaveNew:int8 crc:uint16
+  PC -> board, type 3  SerialServer2HoverFocLimits: '/' 3 slave currentMax:uint16 (0.1 A)
+                                                  speedMax:uint16 (rpm) crc:uint16   (RAM only)
   board -> PC          SerialHover2Server:        0xABCD slave speed:int16 volt:uint16 amp:int16
                                                   odom:int32 crc:uint16
 The board answers after every valid command addressed to its SLAVE_ID, and sets the
 speed command to 0 when no valid command arrives for SERIAL_TIMEOUT (1000 ms).
 
-Units in the answer: volt = V*100, amp = A*100 (always 0 on this board: no DC current
-sensing), speed = realspeed*10. With the EFeru controller (FOC_EFERU) realspeed is the
-motor speed in rpm, so the tool shows speed/10 as rpm.
+Units in the answer: volt = V*100, amp = A*100, speed = realspeed*10. With the EFeru
+controller (FOC_EFERU) realspeed is the motor speed in rpm, so the tool shows speed/10 as
+rpm, and amp is the filtered FOC torque current iq (this board has no DC current sensing;
+0 in the COM and SINE modes).
 
 Examples:
   remote_uart_bus.py monitor                       # speed 0, print telemetry
@@ -23,6 +26,8 @@ Examples:
   remote_uart_bus.py interactive                   # +/- keys change the command
   remote_uart_bus.py config --drive-mode 2         # select DRIVEMODE (not kept over reboot
                                                    #  with EEPROMEN 0; writes board flash)
+  remote_uart_bus.py limits --current 2 --speed 150  # FOC current [A] / speed [rpm] limits,
+                                                   #  RAM only, back to foc_config.h on reboot
 """
 import argparse
 import os
@@ -53,6 +58,11 @@ def crc16_xmodem(data: bytes) -> int:
 
 def frame_speed(slave: int, speed: int, w_state: int = 0) -> bytes:
     body = struct.pack("<BBBhB", ord("/"), 0, slave, max(-1000, min(1000, speed)), w_state)
+    return body + struct.pack("<H", crc16_xmodem(body))
+
+
+def frame_limits(slave: int, current_a: float, speed_rpm: int) -> bytes:
+    body = struct.pack("<BBBHH", ord("/"), 3, slave, int(round(current_a * 10)), speed_rpm)
     return body + struct.pack("<H", crc16_xmodem(body))
 
 
@@ -117,7 +127,7 @@ def read_available(fd: int, timeout: float) -> bytes:
 
 def show(answer: dict, command: int):
     print(f"cmd {command:+5d} | speed {answer['speed'] / 10:+8.1f} rpm | "
-          f"{answer['volt']:6.2f} V | {answer['amp']:+6.2f} A | odom {answer['odom']:+8d} | "
+          f"{answer['volt']:6.2f} V | iq {answer['amp']:+6.2f} A | odom {answer['odom']:+8d} | "
           f"slave {answer['slave']}", flush=True)
 
 
@@ -221,6 +231,25 @@ def cmd_config(fd, args):
     print("no answer to the config frame (wrong SLAVE_ID, wiring, or board not running)")
 
 
+def cmd_limits(fd, args):
+    if args.current is None and args.speed is None:
+        sys.exit("give --current and/or --speed")
+    current = args.current or 0.0
+    speed = args.speed or 0
+    if not 0 <= current <= 15 or not 0 <= speed <= 1000:
+        sys.exit("--current must be 0..15 A, --speed 0..1000 rpm (0 = unchanged)")
+    parser = AnswerParser()
+    for attempt in range(1, 4):
+        os.write(fd, frame_limits(args.slave, current, speed))
+        t_end = time.monotonic() + 0.5
+        while time.monotonic() < t_end:
+            for a in parser.feed(read_available(fd, 0.1)):
+                print(f"limits accepted by slave {a['slave']} (attempt {attempt}): "
+                      f"current {current or 'unchanged'} A, speed {speed or 'unchanged'} rpm")
+                return
+    print("no answer to the limits frame (wrong SLAVE_ID, wiring, or board not running)")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--port", default="/dev/ttyUSB0")
@@ -241,12 +270,15 @@ def main():
     c.add_argument("--drive-mode", type=int, required=True)
     c.add_argument("--batt-full", type=float, default=0.0, help="volts; 0 = leave unchanged")
     c.add_argument("--batt-empty", type=float, default=0.0, help="volts; 0 = leave unchanged")
+    lim = sub.add_parser("limits", help="set FOC current/speed limits (RAM only)")
+    lim.add_argument("--current", type=float, help="current limit in A (0.1 A steps)")
+    lim.add_argument("--speed", type=int, help="speed limit in rpm")
     args = p.parse_args()
 
     fd = open_port(args.port, args.baud)
     try:
         {"monitor": cmd_monitor, "run": cmd_run, "interactive": cmd_interactive,
-         "config": cmd_config}[args.cmd](fd, args)
+         "config": cmd_config, "limits": cmd_limits}[args.cmd](fd, args)
     finally:
         os.close(fd)
 

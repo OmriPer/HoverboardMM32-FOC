@@ -33,8 +33,12 @@
  * 48 ticks at 64 MHz. The EG2123A adds its own dead time and interlock on top. */
 #define FOC_DEAD_TIME         64
 
-/* Samples used to calibrate the phase current offsets at startup (outputs stay off). */
-#define FOC_OFFSET_SAMPLES    2000
+/* Phase current offset calibration at startup. The bridge switches at 50% duty on all phases
+ * (zero voltage, zero current), because the offsets measured with the outputs off read about
+ * 0.3 A low once the bridge switches. The first FOC_OFFSET_SETTLE samples are skipped, then
+ * FOC_OFFSET_SAMPLES are averaged (a power of two). Takes ~100 ms; the wheel should be still. */
+#define FOC_OFFSET_SETTLE     512
+#define FOC_OFFSET_SAMPLES    1024
 
 /* Hall inputs, measured on this board in SIN voltage mode at command +-80 (wheel lifted):
  *   invert 1, order 4:  +31.9 / -33.3 rpm, smooth both ways, command sign = measured sign  <- used
@@ -89,6 +93,8 @@
 #define FOC_DIAG_ENA          1       // motor diagnostics (hall errors, blocked motor)
 #define FOC_I_MOT_MAX         5       // [A] FOC current limit. Bench value; EFeru default is 15.
 #define FOC_N_MOT_MAX         1000    // [rpm] speed limit
+#define FOC_I_MOT_LIMIT       15      // [A] highest current limit FOC_SetLimits() accepts (RemoteUartBus frame 3)
+#define FOC_N_MOT_LIMIT       1000    // [rpm] highest speed limit FOC_SetLimits() accepts
 #define FOC_FIELD_WEAK_ENA    0       // field weakening / phase advance off
 #define FOC_FIELD_WEAK_MAX    5       // [A]
 #define FOC_PHASE_ADV_MAX     25      // [deg] SIN only

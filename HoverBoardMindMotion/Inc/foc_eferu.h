@@ -16,6 +16,13 @@ void FOC_Isr(uint16_t adcPhaseA, uint16_t adcPhaseB);
 /* Map pinstorage DRIVEMODE (0..6) onto the controller type and mode. Returns 0 if invalid. */
 uint8_t FOC_ApplyDriveMode(uint16_t driveMode);
 
+/* Filtered controller iq (torque current) in 0.01 A, for the RemoteUartBus answer. 0 outside FOC modes. */
+int16_t FOC_GetIqCentiAmps(void);
+
+/* Change the current limit (0.1 A) and speed limit (rpm) at runtime, RAM only; 0 = leave unchanged.
+ * Clamped to FOC_I_MOT_LIMIT / FOC_N_MOT_LIMIT. FOC_I_MOT_MAX / FOC_N_MOT_MAX apply after reset. */
+void FOC_SetLimits(uint16_t currentDeciAmps, uint16_t speedRpm);
+
 /* Diagnostics, readable with the debugger. */
 extern uint32_t foc_isrCount;       // controller steps executed
 extern uint16_t foc_maxIsrTicks;    // longest FOC_Isr run in TIM1 ticks (10.4 ns each); one PWM period = 6000
