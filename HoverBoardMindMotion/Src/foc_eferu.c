@@ -17,6 +17,8 @@
 #include "mm32_device.h"
 #endif
 #include "hal_tim.h"
+#include "hal_rcc.h"
+#include "hal_op.h"
 #include "../Inc/pinout.h"
 #include "../Inc/hardware.h"
 #include "../Inc/bldc.h"
@@ -59,6 +61,23 @@ uint8_t  foc_calibrated  = 0;
  *   (A/B/C = HALLAPIN/HALLBPIN/HALLCPIN from pinstorage). Odd swaps reverse the sequence. */
 uint8_t  foc_hallInvert  = FOC_HALL_INVERT;
 uint8_t  foc_hallOrder   = FOC_HALL_ORDER;
+/* Bench test for current sensor calibration, driven from the debugger only.
+ * While foc_testTicks > 0 the controller is bypassed and foc_testDc[] (DC_phaX scale, each
+ * limited to +-FOC_TEST_DC_MAX) is applied as a static voltage vector. foc_testTicks counts
+ * down once per PWM period (16000 per second), so the test ends by itself. */
+#define FOC_TEST_DC_MAX 100
+volatile uint16_t foc_testTicks = 0;
+volatile int16_t  foc_testDc[3] = {0, 0, 0};
+
+/* Phase currents in ADC counts (offset removed, gain applied), and the same low-pass filtered
+ * over about 64 PWM periods (4 ms), for reading with the debugger. */
+int16_t foc_curA = 0;
+int16_t foc_curB = 0;
+int16_t foc_curAFilt = 0;
+int16_t foc_curBFilt = 0;
+static int32_t curAAcc = 0;
+static int32_t curBAcc = 0;
+
 static const uint8_t hallOrderTab[6][3] = {{0,1,2},{0,2,1},{1,0,2},{1,2,0},{2,0,1},{2,1,0}};
 
 static uint8_t  ctrlModReq = CTRL_MOD_VLT;
@@ -102,6 +121,19 @@ void FOC_Init(void)
     if (!FOC_ApplyDriveMode(DRIVEMODE)) {
         FOC_ApplyDriveMode(SINE_VOLT);
     }
+
+#if FOC_OPAMP_ENABLE
+    /* Phase current amplifiers (see foc_config.h): inputs and outputs analog, then enable. */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_OPAMP, ENABLE);
+    pinMode(PA4, INPUT_ADC);
+    pinMode(PA5, INPUT_ADC);
+    pinMode(PA6, INPUT_ADC);
+    pinMode(PB0, INPUT_ADC);
+    pinMode(PB1, INPUT_ADC);
+    pinMode(PB2, INPUT_ADC);
+    OPAMP_Configure(OPAMP1, ENABLE);
+    OPAMP_Configure(OPAMP2, ENABLE);
+#endif
 
     rtM_motor->defaultParam = &rtP_Left;
     rtM_motor->dwork        = &rtDW_motor;
@@ -161,7 +193,25 @@ void FOC_Isr(uint16_t adcPhaseA, uint16_t adcPhaseB)
     int32_t curA = ((int32_t)offsetA - adcPhaseA) * FOC_CUR_GAIN_NUM / FOC_CUR_GAIN_DEN;
     int32_t curB = ((int32_t)offsetB - adcPhaseB) * FOC_CUR_GAIN_NUM / FOC_CUR_GAIN_DEN;
 
+    foc_curA = clamp16(curA, -32768, 32767);
+    foc_curB = clamp16(curB, -32768, 32767);
+    curAAcc += foc_curA - (curAAcc >> 6);
+    curBAcc += foc_curB - (curBAcc >> 6);
+    foc_curAFilt = (int16_t)(curAAcc >> 6);
+    foc_curBFilt = (int16_t)(curBAcc >> 6);
+
     uint8_t enable = (!lowbatperm && !foc_errCode) ? 1 : 0;
+
+    if (foc_testTicks) {
+        foc_testTicks--;
+        volatile uint32_t *ccr[3] = { &TIM1->CCR1, &TIM1->CCR2, &TIM1->CCR3 };
+        for (uint8_t i = 0; i < 3; i++) {
+            int32_t dc = clamp16(foc_testDc[i], -FOC_TEST_DC_MAX, FOC_TEST_DC_MAX);
+            *ccr[i] = (uint16_t)(FOC_PWM_RES / 2 - dc * FOC_PWM_RES / FOC_CTRL_PWM_RES);
+        }
+        TIM_CtrlPWMOutputs(TIM1, enable ? ENABLE : DISABLE);
+        return;
+    }
 
     rtU_motor.b_motEna     = enable;
     rtU_motor.z_ctrlModReq = ctrlModReq;

@@ -23,5 +23,9 @@ extern uint8_t  foc_errCode;        // controller z_errCode (hall/blocked-motor 
 extern uint8_t  foc_calibrated;     // 1 once phase current offsets are measured
 extern uint8_t  foc_hallInvert;     // runtime hall polarity, starts at FOC_HALL_INVERT
 extern uint8_t  foc_hallOrder;      // runtime hall order 0..5, starts at FOC_HALL_ORDER
+extern int16_t  foc_curA, foc_curB;            // phase currents [ADC counts, offset removed]
+extern int16_t  foc_curAFilt, foc_curBFilt;    // same, low-pass filtered (~4 ms)
+extern volatile uint16_t foc_testTicks;        // bench test: static vector active while > 0
+extern volatile int16_t  foc_testDc[3];        // bench test duty per phase, DC_phaX scale
 
 #endif

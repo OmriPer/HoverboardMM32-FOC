@@ -48,14 +48,26 @@
  * (foc_hallInvert, foc_hallOrder); put the working pair here once found. */
 #define FOC_HALL_ORDER        4     // controller A,B,C = HALLC,HALLA,HALLB = PB9,PB8,PB4
 
+/* Phase current amplifiers: the low-side current signals go through the MCU's built-in op-amps,
+ * with the same circuit as MindMotion's SPIN27 motor kit (MM32SPIN27PS_SCH.pdf, gain ~5, output
+ * biased to mid-rail):
+ *   OP1: + PA4, - PA5, output PA6 (ADC ch6)   measures controller phase C (TIM1 CH3)
+ *   OP2: + PB0, - PB1, output PB2 (ADC ch10)  measures controller phase B (TIM1 CH2)
+ * Phases measured on this board with static voltage vectors (foc_testDc); positive = current
+ * into the motor, same as EFeru. The outputs are only valid while the low-side FETs conduct
+ * (sampled at the PWM bottom, TIM1 CC4 = 1).
+ * The op-amps are off after reset, so FOC_Init() enables them. IPHASEAPIN/IPHASEBPIN in
+ * pinstorage must be PB2/PA6. */
+#define FOC_OPAMP_ENABLE      1
+
 /* Phase current scaling. The controller expects A2BIT_CONV counts per ampere on i_phaAB/i_phaBC.
- * PA4/PB0 gain is NOT calibrated yet: current = (offset - adc) * NUM / DEN.
+ * Gain is NOT calibrated yet: current = (offset - adc) * NUM / DEN.
  * Set these after comparing phase currents against a known current (see bring-up notes). */
 #define FOC_A2BIT_CONV        50
 #define FOC_CUR_GAIN_NUM      1
 #define FOC_CUR_GAIN_DEN      1
-/* Which phases IPHASEA/IPHASEB measure: 0 = {iA, iB}, 1 = {iB, iC}. Not verified yet. */
-#define FOC_CUR_PHASE_SEL     0
+/* Which phases IPHASEA/IPHASEB measure: 0 = {iA, iB}, 1 = {iB, iC}, 2 = {iA, iC}. Measured: {iB, iC}. */
+#define FOC_CUR_PHASE_SEL     1
 
 /* Controller limits (same meaning as EFeru config.h). */
 #define FOC_DIAG_ENA          1       // motor diagnostics (hall errors, blocked motor)

@@ -87,8 +87,9 @@ uint16_t pinstorage[64]={
 	0xFFFF,  // [13] ITOTAL  none: no ADC channel responds to total current on this board.
 	PD0,     // [14] TX      UART1 TX1 header (verified with UartTest firmware)
 	PD1,     // [15] RX      UART1 RX1 header
-	PA4,     // [16] IPHASEA phase current amp (0.39 V offset, bidirectional). Only used by FOC; not calibrated.
-	PB0,     // [17] IPHASEB phase current amp, pair of PA4.
+	PB2,     // [16] IPHASEA phase B current, output of the MCU's op-amp OP2 (input PB0).
+	         //      FOC_Init() enables the op-amps (see foc_config.h). Only used by FOC; gain not calibrated.
+	PA6,     // [17] IPHASEB phase C current, output of op-amp OP1 (input PA4). FOC_CUR_PHASE_SEL 1 = {iB, iC}.
 	0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,   // [18]-[22] unused
 	0xFFFF,  // [23] OCP     no overcurrent comparator output found (PA7 pull-low test: no pin responded)
 	0xFFFF,  // [24] OCPREF

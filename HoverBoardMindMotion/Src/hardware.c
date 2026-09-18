@@ -319,6 +319,12 @@ uint16_t analogRead(uint8_t io){
 		case ADC_Channel_9:
 			return ADC1->ADDR9;
 		break;
+		case ADC_Channel_10:
+			return ADC1->ADDR10;
+		break;
+		case ADC_Channel_11:
+			return ADC1->ADDR11;
+		break;
 		default:
 			return 0;
 	}
