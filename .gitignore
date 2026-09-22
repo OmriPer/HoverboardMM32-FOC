@@ -5,7 +5,19 @@ HoverBoardGigaDevice/BinariesToFlash/hoverboard*
 # CMSIS-Toolbox / csolution
 /HoverBoardMindMotion/out/
 /HoverBoardMindMotion/tmp/
+/HoverBoardMindMotion/build/
 /HoverBoardMindMotion/Hoverboard.cbuild-idx.yml
 /HoverBoardMindMotion/*.cbuild-set.yml
-/HoverBoardMindMotion/RTE/_Debug_SPIN27/
-/HoverBoardMindMotion/RTE/_Release_SPIN27/
+# Generated per build target. The tracked _MM32SPIN05/06/25 dirs are the
+# Keil-era ones and must stay.
+/HoverBoardMindMotion/RTE/_Debug_*/
+/HoverBoardMindMotion/RTE/_Release_*/
+
+# Written by the "CMSIS Erase"/"CMSIS Load" tasks in .vscode/tasks.json
+/HoverBoardMindMotion/.cmd.jlink
+
+# Which target is selected in the CMSIS view: local UI state, rewritten
+# every time you switch between SPIN27 and SPIN27-Slave.
+/HoverBoardMindMotion/.vscode/cmsis.json
+
+__pycache__/
