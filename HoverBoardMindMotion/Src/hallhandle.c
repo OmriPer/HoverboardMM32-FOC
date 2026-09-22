@@ -1,5 +1,5 @@
 /*-------------------- Includes -----------------------*/
-#include "../Inc/HallHandle.h"
+#include "../Inc/hallhandle.h"
 #include "../Inc/bldc.h"
 #ifdef TARGET_MM32SPIN25
 #include "HAL_device.h"                 // Device header

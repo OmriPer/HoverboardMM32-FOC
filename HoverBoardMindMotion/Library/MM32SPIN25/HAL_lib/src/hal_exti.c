@@ -19,7 +19,7 @@
 */
 
 /* Includes ------------------------------------------------------------------*/
-#include "HAL_exti.h"
+#include "hal_exti.h"
 
 /** @addtogroup StdPeriph_Driver
 * @{

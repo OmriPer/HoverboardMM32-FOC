@@ -1,0 +1,10 @@
+CompileFlags:
+  CompilationDatabase: /home/omrip/HoverboardMM32-foc/HoverBoardMindMotion/out/Hoverboard/SPIN27/Debug
+
+---
+If:
+  PathMatch: .*\.(c|C|h)$
+CompileFlags:
+  Add:
+    - -include
+    - /home/omrip/HoverboardMM32-foc/HoverBoardMindMotion/out/Hoverboard/SPIN27/Debug/compile_macros_c.h

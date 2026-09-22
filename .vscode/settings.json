@@ -1,0 +1,9 @@
+{
+    // The "CMSIS Load" prelaunch task flashes the board before the debugger
+    // attaches, which trips VS Code's slow-prelaunch warning. It is expected.
+    "debug.hideSlowPreLaunchWarning": true,
+    // Build once: csolution generates the compilation database under out/.
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}/HoverBoardMindMotion/out/Hoverboard/SPIN27/Debug"
+    ]
+}

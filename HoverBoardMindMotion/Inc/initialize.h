@@ -9,6 +9,7 @@ void TIM1_init(u16 arr, u16 psc);
 void BLDC_init();
 void NVIC_Configure(u8 ch, u8 pri);
 void UARTX_Init(u32 baudrate,uint8_t uart);
+void LinkUartInit(u32 baudrate);    //UART2 on the master-slave link, see Inc/board_config.h
 void DMA_NVIC_Config(DMA_Channel_TypeDef* dam_chx, u32 cpar, u32 cmar, u16 cndtr);
 void adc_Init(void);
 uint8_t HALLTIM_Init(u32 arr, u16 psc);

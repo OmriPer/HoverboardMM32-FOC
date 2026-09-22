@@ -1,3 +1,6 @@
+#include "../Inc/foc_config.h"
+#include "../Inc/foc_eferu.h"
+#include "../Inc/board_config.h"
 #include "hal_tim.h"
 #include "hal_conf.h"
 #include "hal_adc.h"
@@ -55,9 +58,20 @@ void DMA1_Channel2_3_IRQHandler(void){
   }
 }	
 
+#if RELAY_ENABLE
+extern uint8_t uarten;
+extern uint8_t sRxBuffer2[1];
+#endif
+
 void DMA1_Channel4_5_IRQHandler(void){
   if(DMA_GetITStatus(DMA1_IT_TC5)) {
     DMA_ClearITPendingBit(DMA1_IT_GL5);
+#if RELAY_ENABLE
+    if(uarten==1){    //master: UART2 is the relay link to the slave
+      RelayRxByte(sRxBuffer2[0]);
+      return;
+    }
+#endif
     serialit();
   }
 }	
@@ -89,6 +103,18 @@ void ADC1_COMP_IRQHandler(void){
 			}
 			poweron++;
 		}else{
+#if FOC_EFERU
+			static uint8_t slowDiv = 0;
+			if(slowDiv++ == 0){    //every 256 steps (~62 Hz): double math is expensive without an FPU
+				uint16_t tmp = ADC1->ADDR15;
+				vcc=(double)4915.2/tmp;
+				vbat = (double)VBAT_DIVIDER*analogRead(VBATPIN)*vcc*100/4096;
+				itotal = 0;    //no DC link current on this board (ITOTAL_DIVIDER is 0 anyway)
+				avgvbat();
+				avgItotal();
+			}
+			FOC_Isr(analogRead(IPHASEAPIN), analogRead(IPHASEBPIN));
+#else
 			uint16_t tmp = ADC1->ADDR15;
 			vcc=(double)4915.2/tmp;
 			vbat = (double)VBAT_DIVIDER*analogRead(VBATPIN)*vcc*100/4096;//read adc register
@@ -153,6 +179,7 @@ void ADC1_COMP_IRQHandler(void){
 					Update_PWM(&pwm_gen);
 				}
 			}
+#endif
 		}
 		ADC_ClearITPendingBit(ADC1, ADC_IT_EOC);
 	}

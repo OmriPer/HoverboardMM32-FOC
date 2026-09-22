@@ -19,8 +19,8 @@
 */
 
 /* Includes ------------------------------------------------------------------*/
-#include "HAL_i2c.h"
-#include "HAL_rcc.h"
+#include "hal_i2c.h"
+#include "hal_rcc.h"
 
 /** @addtogroup StdPeriph_Driver
 * @{

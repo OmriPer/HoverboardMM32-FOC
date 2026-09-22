@@ -19,7 +19,7 @@
 */
 
 /* Includes ------------------------------------------------------------------*/
-#include "HAL_crc.h"
+#include "hal_crc.h"
 
 /** @addtogroup StdPeriph_Driver
 * @{

@@ -3,6 +3,7 @@
 #else
 #include "mm32_device.h"                // Device header
 #endif
+#include "../Inc/foc_config.h"
 #include "hal_gpio.h"
 #include "../Inc/pinout.h"
 #include "../Inc/remoteUartBus.h"
@@ -153,6 +154,10 @@ void speedupdate(){
 		}else{
 			lowbatcount=0;
 		}
+#if FOC_EFERU
+		//EFeru controller (foc_eferu.c) reads speed and lowbatperm in the ADC interrupt and owns TIM1
+		return;
+#endif
 		if(lowbatperm){
 			pwm=0;
 			TIM_CtrlPWMOutputs(TIM1, DISABLE);

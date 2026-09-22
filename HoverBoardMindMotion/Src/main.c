@@ -24,6 +24,9 @@
 #include "../Inc/pwm_gen.h"
 #include "../Inc/PID.h"
 #include "../Inc/hallhandle.h"
+#include "../Inc/foc_config.h"
+#include "../Inc/foc_eferu.h"
+#include "../Inc/board_config.h"
 
 uint8_t step=1;//very importatnt to set to 1 or it will not work
 uint32_t millis;
@@ -37,6 +40,7 @@ bool comm=1;
 int8_t dir=1;
 uint8_t uartBuffer=0;
 u8 sRxBuffer[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+extern uint8_t sRxBuffer2[1];    //master relay, Src/remoteUartBus.c
 int vbat;
 int itotal;
 int fvbat;
@@ -56,15 +60,88 @@ extern uint8_t lowbatperm;
 ////////////////////////////////////////////////////////////////////////////////////////////
 //  compile device specefic firmware for mass produce
 //  change EEPROMEN to 0
-#define EEPROMEN 1
-//  copy pinstorage initializer from autodetect and replace the default line below
-uint16_t pinstorage[64]={0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xDCAB, 31, 250, 0, 19200, 8192, 1, 30, 0, 10, 300, 1, 1, 42000, 32000, 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+//  EEPROMEN 0: the pinstorage initializer below is the whole configuration.
+//  The flash settings page is not read at all, so a config saved by PinFinder
+//  (or leftover flash contents) cannot silently override it.
+#define EEPROMEN 0
+/*
+ * Pin configuration for the MM32SPIN27PF master board, PCB "H217776A-JK 2021-05-11".
+ * Every value below was measured on this board; see the notes per entry.
+ * Pin values are indices into pins[] (names from Inc/hardware.h), 0xFFFF = not present.
+ */
+uint16_t pinstorage[64]={
+	PB8,     // [0]  HALLA   hall sensor A. Order confirmed by PinFinder hall detection with the motor driven.
+	PB4,     // [1]  HALLB
+	PB9,     // [2]  HALLC   (PB4/PB8/PB9 all on TIM3 for hall speed sensing)
+	PA15,    // [3]  LEDR    PA15 lights the LEDs (pulse test). No other LED pins found, so G/B are unset:
+	0xFFFF,  // [4]  LEDG    the battery-colour display in main() needs all three and is skipped.
+	0xFFFF,  // [5]  LEDB
+	0xFFFF,  // [6]  LEDU    not used by this firmware
+	0xFFFF,  // [7]  LEDD    not used by this firmware
+	PC14,    // [8]  BUZZER  pulse test: buzzer sounds when driven high
+#if BOARD_IS_SLAVE
+	0xFFFF,  // [9]  BUTTON  slave: none, powered through the master-slave cable
+	0xFFFF,  // [10] LATCH   slave: none
+#else
+	PB11,    // [9]  BUTTON  active high. Board has no pull-down, so io_init() enables the internal one.
+	         //      With a power bypass switch closed AND the latch (PC13) driven high, PB11 reads high as if the
+	         //      button were held: the firmware then stays in the boot "wait for release" loop and never
+	         //      answers on RemoteUartBus (motor commands still work, they run in interrupts). Open the bypass.
+	PC13,    // [10] LATCH   self-hold. Must be a push-pull output driven high (internal pull-up cannot hold it).
+#endif
+	0xFFFF,  // [11] (unused)
+	PA1,     // [12] VBAT    ADC ch1. Reads 35.7 V at 36 V supply with divider 31.
+	0xFFFF,  // [13] ITOTAL  none: no ADC channel responds to total current on this board.
+#if BOARD_IS_SLAVE
+	PA2,     // [14] TX      slave: UART2 on the master-slave cable, set up by LinkUartInit() (Inc/board_config.h)
+	PA3,     // [15] RX
+#else
+	PD0,     // [14] TX      UART1 TX1 header (verified with UartTest firmware)
+	PD1,     // [15] RX      UART1 RX1 header
+#endif
+	PB2,     // [16] IPHASEA phase B current, output of the MCU's op-amp OP2 (input PB0).
+	         //      FOC_Init() enables the op-amps (see foc_config.h). Only used by FOC; gain not calibrated.
+	PA6,     // [17] IPHASEB phase C current, output of op-amp OP1 (input PA4). FOC_CUR_PHASE_SEL 1 = {iB, iC}.
+	0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,   // [18]-[22] unused
+	0xFFFF,  // [23] OCP     no overcurrent comparator output found (PA7 pull-low test: no pin responded)
+	0xFFFF,  // [24] OCPREF
+	0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,   // [25]-[31] unused
+	0xDCAB,  // [32] MAGIC_NUMBER (only checked when EEPROMEN is 1)
+	31,      // [33] VBAT_DIVIDER   calibrated: 31*36/35.7 = 31.3
+	0,       // [34] ITOTAL_DIVIDER 0 = itotal always 0. There is no ITOTAL pin, and analogRead() on a
+	         //      missing pin returns garbage that could trip SOFT_ILIMIT.
+	0,       // [35]
+	19200,   // [36] BAUD
+	3000,    // [37] PWM_RES        TIM1 period: 96MHz/2/3000 = 16 kHz, the rate the EFeru controller is tuned for
+	         //      (FOC_PWM_RES in Inc/foc_config.h must match).
+#if BOARD_IS_SLAVE
+	2,       // [38] SLAVE_ID       RemoteUartBus address: commands for other ids are ignored, answers carry this id
+#else
+	1,       // [38] SLAVE_ID       RemoteUartBus address: commands for other ids are ignored, answers carry this id.
+	         //      The master relays frames for other ids to the slave (Inc/board_config.h).
+#endif
+	30,      // [39] WINDINGS
+	1,       // [40] INVERT_LOWSIDE 1: EG2123A gate driver LIN input is active low (datasheet + motor test)
+	65535,   // [41] SOFT_ILIMIT    irrelevant while ITOTAL_DIVIDER is 0
+	0,       // [42] AWDG           0: analog watchdog would watch the missing ITOTAL channel
+	1,       // [43]
+	5,       // [44] DRIVEMODE      with FOC_EFERU (Inc/foc_config.h) mapped onto the EFeru controller:
+	         //      0/1 commutation, 2/3 sinusoidal (voltage), 4 FOC voltage, 5 FOC speed, 6 FOC torque.
+	         //      5: the speed command is a target in rpm (up to FOC_N_MOT_MAX), held against load
+	         //      within FOC_I_MOT_MAX. 2 is the fallback if the phase current sensing misbehaves:
+	         //      it does not use the phase currents.
+	42000,   // [45] BAT_FULL       mV
+	32000,   // [46] BAT_EMPTY      mV. Below this for 10 checks with the motor stopped, the motor is disabled
+	         //      until reboot and the buzzer beeps. Keep a bench supply above 32 V.
+	1000,    // [47] SERIAL_TIMEOUT [ms] without a valid command before the speed command drops to 0
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0             // [48]-[63]
+};
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 
 s32 main(void){
 	DELAY_Init();
-	if(!restorecfg()&&EEPROMEN){    //if data in eeprom is not valid, do not boot up
+	if(EEPROMEN&&!restorecfg()){    //EEPROMEN checked first: with 0 the flash config is never loaded    //if data in eeprom is not valid, do not boot up
 		RCC_AHBPeriphClockCmd(RCC_AHBENR_GPIOA, ENABLE);
 		RCC_AHBPeriphClockCmd(RCC_AHBENR_GPIOB, ENABLE);
 		RCC_AHBPeriphClockCmd(RCC_AHBENR_GPIOC, ENABLE);
@@ -95,6 +172,9 @@ s32 main(void){
 	BLDC_init();
 	//initialize timer
 	TIM1_init(PWM_RES, 0);
+#if FOC_EFERU
+	FOC_Init();    //EFeru controller; keeps outputs off until phase current offsets are calibrated
+#endif
 	//systick config
 	//timer1 commutation interrupt config
 	NVIC_Configure(TIM1_BRK_UP_TRG_COM_IRQn, 1);
@@ -106,13 +186,23 @@ s32 main(void){
 	Iwdg_Init(IWDG_Prescaler_32, 0xff);
 	#endif
 	//serial1.begin(19200);
+#if BOARD_IS_SLAVE
+	uarten=2;    //the slave only talks on the master-slave link (Inc/board_config.h)
+	LinkUartInit((uint32_t)BAUD);
+#else
 	uarten=UART_GPIO_Init();
 	UARTX_Init((uint32_t)BAUD,uarten);
+#endif
 	//uart interrupt
 	//uart dma
 	if(uarten==1){
 		DMA_NVIC_Config(DMA1_Channel3, (u32)&UART1->RDR, (u32)sRxBuffer, 1);
 		NVIC_Configure(DMA1_Channel2_3_IRQn, 1);
+#if RELAY_ENABLE
+		LinkUartInit((uint32_t)BAUD);    //UART2 to the slave, see Inc/board_config.h
+		DMA_NVIC_Config(DMA1_Channel5, (u32)&UART2->RDR, (u32)sRxBuffer2, 1);
+		NVIC_Configure(DMA1_Channel4_5_IRQn, 1);
+#endif
 	}else{
 		DMA_NVIC_Config(DMA1_Channel5, (u32)&UART2->RDR, (u32)sRxBuffer, 1);
 		NVIC_Configure(DMA1_Channel4_5_IRQn, 1);

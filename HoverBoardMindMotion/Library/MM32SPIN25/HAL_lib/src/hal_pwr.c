@@ -19,8 +19,8 @@
 */
 
 /* Includes ------------------------------------------------------------------*/
-#include "HAL_pwr.h"
-#include "HAL_rcc.h"
+#include "hal_pwr.h"
+#include "hal_rcc.h"
 
 /** @addtogroup StdPeriph_Driver
 * @{

@@ -1,0 +1,81 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "JLink (launch)",
+            "type": "gdbtarget",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/HoverBoardMindMotion",
+            "program": "out/Hoverboard/SPIN27/Debug/HoverboardMM32SPIN27.axf",
+            "gdb": "arm-none-eabi-gdb",
+            "auxiliaryGdb": true,
+            "preLaunchTask": "CMSIS Load",
+            "initCommands": [
+                "monitor reset 0",
+                "tbreak main",
+                ""
+            ],
+            "customResetCommands": [
+                "monitor reset 0",
+                "maintenance flush register-cache",
+                "maintenance flush dcache",
+                "tbreak main",
+                "continue"
+            ],
+            "target": {
+                "server": "JLinkGDBServerCLExe",
+                "serverParameters": [
+                    "-device",
+                    "MM32SPIN27PF",
+                    "-endian",
+                    "little",
+                    "-if",
+                    "swd",
+                    "-speed",
+                    "1000",
+                    "-halt",
+                    "-noir",
+                    "-vd",
+                    "-nogui",
+                    "-localhostonly",
+                    "-silent",
+                    "-port",
+                    "3333",
+                    "-TelnetPort",
+                    "4444"
+                ],
+                "port": "3333"
+            },
+            "cmsis": {
+                "cbuildRunFile": "${command:cmsis-csolution.getCbuildRunFile}",
+                "updateConfiguration": "auto"
+            }
+        },
+        {
+            "name": "JLink (attach)",
+            "type": "gdbtarget",
+            "request": "attach",
+            "cwd": "${workspaceFolder}/HoverBoardMindMotion",
+            "program": "out/Hoverboard/SPIN27/Debug/HoverboardMM32SPIN27.axf",
+            "gdb": "arm-none-eabi-gdb",
+            "auxiliaryGdb": true,
+            "initCommands": [
+                ""
+            ],
+            "customResetCommands": [
+                "monitor reset 0",
+                "maintenance flush register-cache",
+                "maintenance flush dcache",
+                "tbreak main",
+                "continue"
+            ],
+            "target": {
+                "port": "3333"
+            },
+            "cmsis": {
+                "cbuildRunFile": "${command:cmsis-csolution.getCbuildRunFile}",
+                "updateConfiguration": "auto"
+            }
+        }
+    ]
+}

@@ -1,4 +1,6 @@
 //initialize all pheberals
+#include "../Inc/foc_config.h"
+#include "../Inc/board_config.h"
 #include "../Inc/pinout.h"
 #include "hal_gpio.h"
 #include "hal_rcc.h"
@@ -38,7 +40,7 @@ void io_init(){
 		pinMode(LATCHPIN, OUTPUT);
 	}
 	if(BUTTONPIN<PINCOUNT){
-		pinMode(BUTTONPIN, INPUT);
+		pinMode(BUTTONPIN, INPUT_PULLDOWN);    //button is active high; without a pull-down a floating pin reads as pressed
 	}
 	if(BUZZERPIN<PINCOUNT){
 		pinMode(BUZZERPIN, OUTPUT);
@@ -151,7 +153,9 @@ void TIM1_init(u16 arr, u16 psc){
 	TIM_OCInitStructure.TIM_Pulse = 0;
 	TIM_OCInitStructure.TIM_OCNPolarity = INVERT_LOWSIDE ? TIM_OCNPolarity_Low : TIM_OCNPolarity_High;
 	TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Reset;
-	TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCNIdleState_Reset;
+	//idle level must mean "low side off": with an active-low LIN (INVERT_LOWSIDE) that is high.
+	//With Reset, disabling the outputs would switch all three low sides on and short the motor phases.
+	TIM_OCInitStructure.TIM_OCNIdleState = INVERT_LOWSIDE ? TIM_OCNIdleState_Set : TIM_OCNIdleState_Reset;
 
 	TIM_OC1Init(TIM1, &TIM_OCInitStructure);
 	TIM_OC2Init(TIM1, &TIM_OCInitStructure);
@@ -167,9 +171,15 @@ void TIM1_init(u16 arr, u16 psc){
 	// Automatic Output enable, Break, dead time and lock configuration
 	TIM_BDTRInitStructure.TIM_OSSIState = TIM_OSSIState_Enable;
 	TIM_BDTRInitStructure.TIM_OSSRState = TIM_OSSRState_Enable;
-	TIM_BDTRInitStructure.TIM_Break = TIM_Break_Enable;
+	//break input only when something drives it (AWDG or an OCP pin). With neither, BKIN is unconnected and
+	//an active-low break could hold all outputs off.
+	TIM_BDTRInitStructure.TIM_Break = (AWDG || OCPPIN<PINCOUNT) ? TIM_Break_Enable : TIM_Break_Disable;
 	TIM_BDTRInitStructure.TIM_BreakPolarity = AWDG ? TIM_BreakPolarity_High : TIM_BreakPolarity_Low ;
+#if FOC_EFERU
+	TIM_BDTRInitStructure.TIM_DeadTime = FOC_DEAD_TIME;    //complementary switching on all phases
+#else
 	TIM_BDTRInitStructure.TIM_DeadTime = 1;
+#endif
 	TIM_BDTRInitStructure.TIM_LOCKLevel = TIM_LOCKLevel_OFF;
 	TIM_BDTRInitStructure.TIM_AutomaticOutput = TIM_AutomaticOutput_Enable;
 	TIM_BDTRConfig(TIM1, &TIM_BDTRInitStructure);
@@ -245,10 +255,21 @@ uint8_t UART_GPIO_Init(){
 			}else{
 				pinMode(uarts[i].io, INPUT);
 			}
-			uart=uarts[i].uart;
+			uart = uarts[i].uart==2 ? 2 : 1;    //UART1 entries in uarts[] leave .uart at 0, which UARTX_Init() treated as UART2
 		}
 	}
 	return uart;
+}
+
+/* UART2 on the master-slave cable (Inc/board_config.h), same baud rate as the PC link. RX has a
+ * pull-up so a disconnected or unpowered peer reads as an idle line. */
+void LinkUartInit(u32 baudrate){
+	UARTX_Init(baudrate, 2);
+	GPIOA->AFRL = (GPIOA->AFRL & ~(0xFu << 12)) | (0x1u << 12);    //PA3 AF1 = UART2_RX
+	GPIOA->ODR |= 1u << 3;                                         //pull-up
+	GPIOA->CRL  = (GPIOA->CRL  & ~(0xFu << 12)) | (0x8u << 12);    //input with pull-up/down
+	GPIOA->AFRL = (GPIOA->AFRL & ~(0xFu << 8)) | (0x1u << 8);      //PA2 AF1 = UART2_TX
+	GPIOA->CRL  = (GPIOA->CRL  & ~(0xFu << 8)) | (0xBu << 8);      //alternate function push-pull, 50 MHz
 }
 
 void DMA_NVIC_Config(DMA_Channel_TypeDef* dam_chx, u32 cpar, u32 cmar, u16 cndtr){

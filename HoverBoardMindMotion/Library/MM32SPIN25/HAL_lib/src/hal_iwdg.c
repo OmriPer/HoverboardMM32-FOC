@@ -19,7 +19,7 @@
 */
 
 /* Includes ------------------------------------------------------------------*/
-#include "HAL_iwdg.h"
+#include "hal_iwdg.h"
 
 /** @addtogroup StdPeriph_Driver
 * @{

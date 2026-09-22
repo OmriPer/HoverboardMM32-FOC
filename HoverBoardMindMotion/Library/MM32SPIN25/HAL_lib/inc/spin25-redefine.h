@@ -21,6 +21,8 @@
 #define ADC_Mode_Continue ADC_Mode_Continuous_Scan
 #define ADC_Channel_VoltReference ADC_Channel_15
 #define ADC_COMP_IRQn ADC1_IRQn
+//the SPIN2x vector table names this vector ADC1_IRQHandler; without this the ADC interrupt handler is never linked
+#define ADC1_COMP_IRQHandler ADC1_IRQHandler
 
 
 

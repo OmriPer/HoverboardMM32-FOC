@@ -19,7 +19,7 @@
 */
 
 /* Includes ------------------------------------------------------------------*/
-#include "HAL_flash.h"
+#include "hal_flash.h"
 
 /** @addtogroup StdPeriph_Driver
 * @{

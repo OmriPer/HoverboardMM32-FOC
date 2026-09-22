@@ -25,6 +25,9 @@
 
 #include "../Inc/sim_eeprom.h"
 #include "../Inc/calculation.h"
+#include "../Inc/foc_config.h"
+#include "../Inc/foc_eferu.h"
+#include "../Inc/board_config.h"
 
 
 #pragma pack(1)
@@ -77,6 +80,15 @@ typedef struct {			// ´#pragma pack(1)´ needed to get correct sizeof()
    uint16_t checksum;
 } SerialServer2HoverConfig;
 
+typedef struct {			// FOC limits, RAM only (not saved), only with FOC_EFERU
+   uint8_t cStart;			//  = '/';
+   uint8_t  iDataType;  //  3 = unique id for this data struct
+   uint8_t 	iSlave;			//  contains the slave id this message is intended for
+   uint16_t iCurrentMax;	//  FOC current limit in 0.1 A, 0 = unchanged
+   uint16_t iSpeedMax;	//  FOC speed limit in rpm, 0 = unchanged
+   uint16_t checksum;
+} SerialServer2HoverFocLimits;
+
 static uint8_t aReceiveBuffer[255];	//sizeof(SerialServer2Hover)
 
 #define START_FRAME         0xABCD       // [-] Start frme definition for reliable serial communication
@@ -94,6 +106,21 @@ typedef struct{				// ´#pragma pack(1)´ needed to get correct sizeof()
 
 
 uint32_t iTimeLastRx = 0;
+
+
+#if RELAY_ENABLE
+/* Master: relay between the PC (UART1) and the slave (UART2), see Inc/board_config.h.
+ * The DMA interrupts only fill these buffers; RemoteUpdate() sends them from the main loop, so the
+ * relayed answers never interleave with the master's own. A frame that arrives while the previous one
+ * in the same direction is still waiting is dropped; the PC resends at its own rate. */
+uint8_t sRxBuffer2[1];                                      // UART2 RX DMA target
+static uint8_t aRelayToSlave[sizeof(SerialServer2HoverConfig)];   // largest PC frame
+static volatile uint8_t iRelayToSlaveLen = 0;
+static uint8_t aSlaveRx[sizeof(SerialHover2Server)];
+static uint8_t iSlaveRxPos = 0;
+static uint8_t aRelayToPc[sizeof(SerialHover2Server)];
+static volatile uint8_t bRelayToPc = 0;
+#endif
 
 
 uint16_t CalcCRC(uint8_t *ptr, int count){    //file checksum calculation
@@ -132,7 +159,44 @@ void RemoteUpdate(void){
 		AnswerMaster();
 		bAnswerMaster = 0;
 	}
+#if RELAY_ENABLE
+	if (iRelayToSlaveLen)
+	{
+		UART_Send_GroupTo(UART2, aRelayToSlave, iRelayToSlaveLen);
+		iRelayToSlaveLen = 0;
+	}
+	if (bRelayToPc)
+	{
+		UART_Send_GroupTo(UART1, aRelayToPc, sizeof(aRelayToPc));
+		bRelayToPc = 0;
+	}
+#endif
 }
+
+#if RELAY_ENABLE
+/* Master: one byte from the slave (UART2 RX DMA interrupt). Collects SerialHover2Server answers;
+ * complete frames with a valid CRC are queued for the PC. */
+void RelayRxByte(uint8_t cRead){
+	/* The answer starts with START_FRAME 0xABCD, sent low byte first. */
+	if (iSlaveRxPos == 0 && cRead != 0xCD)
+		return;
+	if (iSlaveRxPos == 1 && cRead != 0xAB)
+	{
+		iSlaveRxPos = (cRead == 0xCD) ? 1 : 0;
+		return;
+	}
+	aSlaveRx[iSlaveRxPos++] = cRead;
+	if (iSlaveRxPos < sizeof(aSlaveRx))
+		return;
+	iSlaveRxPos = 0;
+	uint16_t iCRC = (aSlaveRx[sizeof(aSlaveRx)-1] << 8) | aSlaveRx[sizeof(aSlaveRx)-2];
+	if (iCRC == CalcCRC(aSlaveRx, sizeof(aSlaveRx) - 2) && !bRelayToPc)
+	{
+		memcpy(aRelayToPc, aSlaveRx, sizeof(aRelayToPc));
+		bRelayToPc = 1;
+	}
+}
+#endif
 
 extern 	uint32_t steerCounter;
 
@@ -145,9 +209,14 @@ void AnswerMaster(void){
 	oData.cStart = START_FRAME;
 	oData.iSlave = SLAVE_ID;
 	oData.iVolt = (uint16_t) (fvbat);
+#if FOC_EFERU
+	oData.iAmp = FOC_GetIqCentiAmps();    //no DC current sensing on this board: report the FOC torque current (0 outside FOC modes)
+#else
 	oData.iAmp = (int16_t) 	(fitotal);
+#endif
 	oData.iSpeed = (int16_t) (realspeed	*10);
 	oData.iOdom = (int32_t) iOdom;	//pwm	;
+
 	//oData.iOdom = iAnswerMaster++;
 
 	oData.checksum = 	CalcCRC((uint8_t*) &oData, sizeof(oData) - 2);	// (first bytes except crc)
@@ -192,6 +261,8 @@ void serialit(void){
 			case 0: iRxDataSize = sizeof(SerialServer2Hover);	break;
 			case 1: iRxDataSize = sizeof(SerialServer2HoverMaster);	break;
 			case 2: iRxDataSize = sizeof(SerialServer2HoverConfig);	break;
+			case 3: iRxDataSize = sizeof(SerialServer2HoverFocLimits);	break;
+			default: iReceivePos = -1;	break;    //unknown type: wait for the next '/'
 		}
 		return;
 	}
@@ -235,6 +306,12 @@ void serialit(void){
 					{
 						BAT_EMPTY = pData->fBattEmpty * 1000;
 					}
+#if FOC_EFERU
+					if (FOC_ApplyDriveMode(pData->iDriveMode))    //0..6, see foc_eferu.c
+					{
+						DRIVEMODE = pData->iDriveMode;
+					}
+#else
 					if (pData->iDriveMode <= SINE_SPEED)
 					{
 						DRIVEMODE = pData->iDriveMode;
@@ -242,10 +319,19 @@ void serialit(void){
 						PID_Init();
 						TIMOCInit();
 					}
+#endif
 					if (pData->iSlaveNew >= 0 && 0)    //disabled!
 						SLAVE_ID = pData->iSlaveNew;
 			
 					EEPROM_Write((u8*)pinstorage, 2 * 64);    //if the detection failed, the pin is still saved
+					break;
+				}
+				case 3:
+				{
+#if FOC_EFERU
+					SerialServer2HoverFocLimits* pData = (SerialServer2HoverFocLimits*) aReceiveBuffer;
+					FOC_SetLimits(pData->iCurrentMax, pData->iSpeedMax);
+#endif
 					break;
 				}
 			}
@@ -254,6 +340,13 @@ void serialit(void){
 			bAnswerMaster = 1;
 			iTimeLastRx = millis;  	// Reset the pwm timout to avoid stopping motors
 		}
+#if RELAY_ENABLE
+		else if (!iRelayToSlaveLen && iRxDataSize <= sizeof(aRelayToSlave))
+		{
+			memcpy(aRelayToSlave, aReceiveBuffer, iRxDataSize);    // for another board: pass on to the slave
+			iRelayToSlaveLen = iRxDataSize;
+		}
+#endif
 	}
 }
 

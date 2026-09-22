@@ -16,7 +16,13 @@
 #define M16(adr) (*((vu16 *) (adr)))
 
 
+#ifdef TARGET_MM32SPIN25
+//MM32SPIN27PF (128KB): last 2KB, reserved in Hoverboard_SPIN27.sct. At 0x08007800 (end of the 32KB SPIN25)
+//a RemoteUartBus config frame would erase live code once the image is larger than 30KB.
+#define BASED_FLASH_SECTOR_ADDRESS   0x0801F800
+#else
 #define BASED_FLASH_SECTOR_ADDRESS   0x08007800
+#endif
 ////////////////////////////////////////////////////////////////////////////////
 /// @addtogroup MM32_Example_Layer
 /// @{

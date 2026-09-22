@@ -1,0 +1,10 @@
+{
+    // The "CMSIS Load" prelaunch task flashes the board before the debugger
+    // attaches, which trips VS Code's slow-prelaunch warning. It is expected.
+    "debug.hideSlowPreLaunchWarning": true,
+    "cmake.sourceDirectory": "${workspaceFolder}/tmp/SPIN27/default/Hoverboard.Debug+SPIN27",
+    // Build once: csolution generates the compilation database under out/.
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}/out/Hoverboard/SPIN27/Debug"
+    ]
+}
